@@ -2369,7 +2369,7 @@ function queueMessage(payload){
   if (S.offline) return true; // solo mode: no server — pretend the message was delivered
   if (!S.code) return false;
   const generation = transportGeneration;
-  const packet = Object.assign({ timestamp:Date.now(), messageId:newMessageId() }, payload);
+  const packet = Object.assign({ timestamp:Date.now(), messageId:newMessageId(), code:S.code }, payload);
   postWithRetry(packet, generation).catch(() => {});
   return true;
 }
@@ -2519,7 +2519,7 @@ async function joinRoom(code){
   const generation = transportGeneration;
   resetConnectionDiagnostics(roomTopic(S.code));
   const ch = getChar(S.me.charId);
-  const request = { type:'join-request', name:S.me.name, timestamp:Date.now(), messageId:newMessageId(), clientId:S.me.peerId,
+  const request = { type:'join-request', code:S.code, name:S.me.name, timestamp:Date.now(), messageId:newMessageId(), clientId:S.me.peerId,
     charId:S.me.charId, char:ch && ch.custom ? ch : undefined };
   await postWithRetry(request, generation);
   if (generation !== transportGeneration) return;
