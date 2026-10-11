@@ -1,0 +1,1 @@
+{"dependencies":{"ws":"^8.18.0"},"description":"WebSocket signaling server for Game Night multiplayer","engines":{"node":">=18"},"main":"server.js","name":"game-night-server","scripts":{"start":"node server.js"},"version":"1.0.0"}
