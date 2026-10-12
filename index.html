@@ -1,0 +1,3005 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Game Night — Human DM + AI Copilot</title>
+<style>
+/* ============ Module 1: Shell + Networking + Player View + Chat + Dice ============ */
+:root{
+  --bg:#14100b; --bg2:#0e0b07; --panel:#1e1710; --panel2:#262015;
+  --gold:#d9a441; --amber:#f0c569; --amber-dim:#a97f2f;
+  --text:#e8dcc3; --muted:#9a8a6d; --border:#5a4226; --border2:#3a2c18;
+  --red:#c0392b; --green:#4d8f5f;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{
+  background:radial-gradient(1200px 800px at 50% -10%, #241a10 0%, var(--bg) 60%, var(--bg2) 100%);
+  color:var(--text);
+  font-family:Georgia,'Palatino Linotype','Book Antiqua',Palatino,serif;
+  min-height:100vh;
+}
+.hidden{display:none !important}
+h1,h2,h3{color:var(--amber);letter-spacing:.06em;margin:.4em 0}
+button{
+  font-family:inherit;cursor:pointer;
+  background:linear-gradient(180deg,#3a2c18,#241a10);
+  color:var(--amber);border:1px solid var(--border);border-radius:8px;
+  padding:.55em 1em;font-size:1rem;
+}
+button:hover{border-color:var(--gold);color:#ffe9b0}
+button:disabled{opacity:.5;cursor:default}
+input,select{
+  font-family:inherit;background:#0f0c08;color:var(--text);
+  border:1px solid var(--border2);border-radius:6px;padding:.55em .7em;font-size:1rem;width:100%;
+}
+input:focus,select:focus{outline:none;border-color:var(--gold)}
+label{font-size:.9rem;color:var(--muted)}
+
+/* ---------- Landing ---------- */
+#landing{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem;position:relative}
+.tavern-frame{
+  max-width:560px;width:100%;text-align:center;
+  background:linear-gradient(180deg,rgba(38,28,16,.92),rgba(20,15,8,.95));
+  border:1px solid var(--border);border-radius:16px;
+  box-shadow:0 0 60px rgba(217,164,65,.12), inset 0 0 40px rgba(0,0,0,.5);
+  padding:3rem 2.5rem;
+}
+.tavern-frame .logo{font-size:3.5rem;filter:drop-shadow(0 0 12px rgba(217,164,65,.5))}
+.tavern-frame h1{font-size:3rem;margin:.2em 0;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+.tagline{color:var(--muted);font-style:italic;margin:0 0 1.8em}
+.btn-row{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.5rem}
+.big-btn{font-size:1.25rem;padding:.9em 1.6em;border-radius:12px;min-width:220px}
+.form-card{
+  margin:1rem auto 0;max-width:380px;display:flex;flex-direction:column;gap:.7rem;
+  background:rgba(0,0,0,.3);border:1px solid var(--border2);border-radius:10px;padding:1.2rem;
+}
+#room-code-big{
+  font-size:2.6rem;letter-spacing:.35em;color:var(--amber);
+  text-shadow:0 0 18px rgba(217,164,65,.6);padding:.2em 0 .2em .35em;
+}
+#btn-settings{
+  position:absolute;top:1rem;right:1rem;font-size:1.3rem;
+  width:2.6em;height:2.6em;padding:0;border-radius:50%;
+}
+
+/* ---------- Player view ---------- */
+#player-view{height:100vh;display:flex;flex-direction:column}
+#player-topbar{
+  display:flex;align-items:center;gap:1rem;
+  background:linear-gradient(180deg,#241a10,#171208);
+  border-bottom:1px solid var(--border);padding:.5rem 1rem;
+}
+#player-topbar .brand{color:var(--amber);font-size:1.2rem;letter-spacing:.08em}
+#pv-room{color:var(--gold);font-weight:bold;letter-spacing:.15em}
+#pv-name{color:var(--muted);font-style:italic}
+#player-topbar .spacer{flex:1}
+#player-main{flex:1;display:flex;min-height:0}
+#pmap-wrap{flex:1;position:relative;min-width:0;background:#0a0805}
+#pmap{position:absolute;inset:0;overflow:hidden}
+#player-side{
+  width:330px;flex-shrink:0;display:flex;flex-direction:column;gap:.6rem;
+  background:var(--panel);border-left:1px solid var(--border);padding:.7rem;min-height:0;
+}
+
+/* character card */
+#char-card{background:var(--panel2);border:1px solid var(--border2);border-radius:10px;padding:.7rem}
+#char-card input{margin-bottom:.4rem}
+.hp-row{display:flex;align-items:center;justify-content:center;gap:.7rem;margin:.4rem 0;font-size:1.15rem}
+.hp-row button{width:2.2em;height:2.2em;padding:0;font-size:1.1rem;border-radius:50%}
+#hp-cur{color:var(--amber);font-size:1.35rem}
+.ac-row{display:flex;align-items:center;gap:.5rem;color:var(--muted)}
+.ac-row input{width:4.5em}
+
+/* dice */
+#dice-panel{background:var(--panel2);border:1px solid var(--border2);border-radius:10px;padding:.7rem;text-align:center}
+#dice-face{
+  width:3.2em;height:3.2em;margin:0 auto .5rem;line-height:3.2em;font-size:1.9rem;
+  background:linear-gradient(145deg,#3a2c18,#1c140a);border:2px solid var(--gold);
+  border-radius:14px;color:var(--amber);text-shadow:0 0 10px rgba(217,164,65,.7);
+}
+#dice-face.shaking{animation:shake .12s infinite}
+@keyframes shake{0%{transform:translate(0,0) rotate(0)}25%{transform:translate(-3px,2px) rotate(-8deg)}50%{transform:translate(3px,-2px) rotate(6deg)}75%{transform:translate(-2px,-3px) rotate(-4deg)}100%{transform:translate(0,0) rotate(0)}}
+.dice-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-bottom:.4rem}
+.dice-btns button{padding:.45em 0}
+#dice-note{color:var(--muted);font-size:.85rem;min-height:1.2em}
+
+/* chat */
+#chat-panel{flex:1;display:flex;flex-direction:column;min-height:0;background:#0f0c08;border:1px solid var(--border2);border-radius:10px}
+.chat-log{flex:1;overflow-y:auto;padding:.6rem;display:flex;flex-direction:column;gap:.35rem;min-height:120px}
+.chat-msg{font-size:.92rem;line-height:1.35;word-wrap:break-word}
+.chat-msg b{color:var(--gold)}
+.chat-msg.me b{color:var(--amber)}
+.chat-msg.sys{color:var(--muted);font-style:italic;font-size:.85rem}
+.chat-msg.sys b{color:var(--muted)}
+.chat-msg.dice b{color:#e08a3c}
+.chat-input-row{display:flex;gap:.4rem;padding:.5rem;border-top:1px solid var(--border2)}
+.chat-input-row button{white-space:nowrap}
+
+/* ---------- DM view (mount point for DM modules) ---------- */
+#dm-view{min-height:100vh}
+
+/* ---------- Settings modal ---------- */
+#settings-modal{
+  position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:1000;
+  display:flex;align-items:center;justify-content:center;padding:1rem;
+}
+.modal-card{
+  background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:1.8rem;max-width:420px;width:100%;display:flex;flex-direction:column;gap:.8rem;
+}
+.modal-card .hint{font-size:.8rem;color:var(--muted);margin:-.4em 0 .4em}
+.modal-btns{display:flex;gap:.6rem;justify-content:flex-end;margin-top:.4rem}
+
+@media (max-width:820px){
+  #player-main{flex-direction:column}
+  #pmap-wrap{min-height:40vh}
+  #player-side{width:100%;border-left:none;border-top:1px solid var(--border);max-height:60vh;overflow-y:auto}
+}
+
+/* ---- Module 2: DM Map Canvas ---- */
+#gn-dmmap-wrap { position:relative; width:100%; height:100%; background:#14100c; overflow:hidden; }
+#gn-dmmap-canvas { display:block; width:100%; height:100%; cursor:crosshair; touch-action:none; }
+#gn-dmmap-toolbar { position:absolute; top:8px; left:8px; display:flex; gap:6px; flex-wrap:wrap;
+  background:rgba(20,16,12,.88); border:1px solid #6b5426; border-radius:10px; padding:8px; max-width:72%; z-index:5; }
+.gn-dmbtn { font:12px/1.2 system-ui; color:#f3e9d2; background:#3a2f1d; border:1px solid #6b5426;
+  border-radius:8px; padding:6px 9px; cursor:pointer; }
+.gn-dmbtn:hover { background:#4a3d24; }
+.gn-dmbtn.active { background:#8a6d2f; border-color:#ffd75e; color:#fff; }
+.gn-dmbtn.danger { background:#5a2323; border-color:#a44; }
+.gn-dm-sep { width:1px; background:#6b5426; margin:2px 4px; }
+#gn-dmmap-rooms { position:absolute; top:8px; right:8px; display:flex; flex-direction:column; gap:6px; z-index:5; }
+#gn-dmmap-rooms .gn-dmbtn { text-align:left; }
+#gn-dmmap-staging { position:absolute; left:0; right:0; bottom:0; height:76px; display:flex; align-items:center; gap:8px;
+  background:rgba(20,16,12,.92); border-top:1px solid #6b5426; padding:8px 12px; z-index:5; overflow-x:auto; }
+#gn-dmmap-staging .gn-stg-label { font:11px system-ui; color:#c9b47a; white-space:nowrap; }
+#gn-dmmap-readout { position:absolute; bottom:88px; left:12px; z-index:5; font:12px system-ui; color:#ffd75e;
+  background:rgba(20,16,12,.85); border:1px solid #6b5426; border-radius:8px; padding:6px 10px; pointer-events:none; }
+#gn-dmmap-fogsize { display:flex; align-items:center; gap:4px; font:11px system-ui; color:#c9b47a; }
+#gn-dmmap-fogsize input[type=range] { width:70px; }
+
+/* ---------- Module 3: DM Quick-Slot Tools ---------- */
+.dm-toolbar{position:fixed;top:8px;right:8px;z-index:60;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.dm-toolbar button{background:#1d2130;border:1px solid #4a5170;color:#e8e6df;border-radius:8px;padding:7px 10px;font-size:13px;cursor:pointer}
+.dm-toolbar button:hover{background:#2a3048}
+.dm-toolbar button.active{background:#6d5bd0;border-color:#8f7ff0}
+.dm-panel{position:fixed;top:52px;right:412px;width:310px;max-height:82vh;overflow-y:auto;z-index:60;
+/* Bug 11: offset left of the 400px #dm-side so floating panels never cover guide/copilot controls */
+  background:#14161df2;border:1px solid #3a3f52;border-radius:10px;color:#e8e6df;padding:12px;
+  font:13px/1.45 system-ui,-apple-system,sans-serif;box-shadow:0 8px 30px #000a}
+.dm-panel h3{margin:0 0 8px;font-size:14px;letter-spacing:.3px;color:#ffd76a;display:flex;justify-content:space-between;align-items:center}
+/* Bug 7: close buttons on quick-slot panels */
+.dm-panel-close{background:none;border:none;color:#8a8f9f;font-size:14px;cursor:pointer;padding:2px 6px;border-radius:4px}
+.dm-panel-close:hover{background:#3a3f52;color:#fff}
+.dm-panel h4{margin:10px 0 4px;font-size:12px;color:#9fb0ff;text-transform:uppercase;letter-spacing:.5px}
+.dm-panel label{display:block;margin:6px 0 2px;color:#b9bdcf;font-size:12px}
+.dm-panel input[type=text],.dm-panel input[type=number],.dm-panel textarea,.dm-panel select{
+  width:100%;box-sizing:border-box;background:#0e1017;border:1px solid #3a3f52;color:#e8e6df;
+  border-radius:6px;padding:6px 8px;font-size:13px;margin-bottom:4px}
+.dm-panel textarea{min-height:64px;resize:vertical}
+.dm-row{display:flex;gap:6px;margin:6px 0}
+.dm-row>*{flex:1}
+.dm-btn{background:#2a3048;border:1px solid #4a5170;color:#e8e6df;border-radius:6px;padding:6px 8px;font-size:12.5px;cursor:pointer}
+.dm-btn:hover{background:#39415f}
+.dm-btn.primary{background:#6d5bd0;border-color:#8f7ff0;color:#fff}
+.dm-btn.danger{background:#5a2323;border-color:#8a3a3a}
+.dm-btn.on{background:#2f6b3a;border-color:#4caf50}
+.dm-presets{display:flex;gap:6px;margin:4px 0}
+.dm-presets .dm-btn.sel{background:#6d5bd0;border-color:#8f7ff0;color:#fff}
+.dm-shapes{display:flex;gap:6px;margin:4px 0}
+.dm-list{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.dm-card{background:#0e1017;border:1px solid #3a3f52;border-radius:8px;padding:8px}
+.dm-card .t{font-weight:700;color:#ffd76a}
+.dm-card .sub{color:#9aa0b5;font-size:12px}
+.dm-card .secret{color:#c98fff;font-size:12px;font-style:italic}
+.dm-init-row{display:flex;align-items:center;gap:6px;background:#0e1017;border:1px solid #3a3f52;border-radius:8px;padding:6px 8px}
+.dm-init-row.turn{border-color:#ffd76a;box-shadow:0 0 8px #ffd76a66}
+.dm-init-row .nm{flex:1;font-weight:600}
+.dm-init-row input{width:44px;background:#14161d;border:1px solid #3a3f52;color:#e8e6df;border-radius:5px;padding:3px 5px;font-size:12px}
+.dm-hpbtn{background:#2a3048;border:1px solid #4a5170;color:#fff;border-radius:5px;width:24px;height:24px;cursor:pointer;font-size:13px;line-height:1}
+.dm-sfx-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:6px 0}
+.dm-status{font-size:12px;color:#9aa0b5;margin-top:6px;min-height:16px}
+.dm-npcline{background:#1d2130;border-left:3px solid #6d5bd0;padding:8px;margin:8px 0;border-radius:0 6px 6px 0;font-style:italic}
+#handoutModal{position:fixed;inset:0;z-index:200;display:flex;align-items:center;justify-content:center;background:#000c}
+#handoutModal .box{background:#f5efdd;color:#2a2118;max-width:520px;width:90%;max-height:80vh;overflow:auto;
+  border-radius:10px;padding:22px 24px;box-shadow:0 10px 60px #000;font-family:Georgia,serif}
+#handoutModal h2{margin:0 0 10px;font-size:20px}
+#handoutModal p{white-space:pre-wrap;line-height:1.6}
+#handoutModal img{max-width:100%;border-radius:6px;margin:8px 0}
+#handoutModal .close{float:right;background:#2a2118;color:#f5efdd;border:none;border-radius:6px;padding:6px 12px;cursor:pointer}
+#aoeOverlay{pointer-events:none}
+
+/* ---- Module 4: AI Copilot + DM Guide + Always-On Listening ---- */
+#dm-panels{display:flex;flex-direction:column;gap:10px;height:100%;overflow-y:auto;padding:10px;
+  background:#0f1420;color:#e8e4d8;font-size:14px}
+#dm-panels .mic-ind{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#7de07d;
+  background:#10240f;border:1px solid #2c5a2c;border-radius:20px;padding:3px 10px;width:max-content}
+#dm-panels .mic-ind.off{color:#999;background:#1a1a1a;border-color:#444}
+#dm-panels .mic-ind .dot{width:8px;height:8px;border-radius:50%;background:#4f4;animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.25}}
+.guide-seed-row{display:flex;gap:6px}
+.guide-seed-row input{flex:1;background:#1a2233;color:#e8e4d8;border:1px solid #3a4a6a;border-radius:6px;padding:8px}
+#dm-panels button{background:#2a3a5f;color:#e8e4d8;border:1px solid #4a5f8f;border-radius:6px;
+  padding:7px 12px;cursor:pointer;font-size:13px}
+#dm-panels button:hover{background:#35497a}
+#dm-panels button.danger{background:#5f2a2a;border-color:#8f4a4a}
+.guide-beat{background:#16202f;border:1px solid #3a4a6a;border-radius:8px;padding:12px}
+.guide-beat h3{margin:0 0 6px;color:#ffd97d}
+.guide-beat p.desc{margin:0 0 10px;line-height:1.45}
+.guide-beat .beat-count{font-size:11px;color:#8aa;letter-spacing:1px}
+.readaloud{background:#1e2a12;border-left:3px solid #9db86a;padding:8px 10px;margin:8px 0;border-radius:0 6px 6px 0}
+.readaloud p{margin:0 0 6px;font-style:italic;line-height:1.45}
+.readaloud button,.npc-line button{font-size:11px;padding:4px 8px;margin-top:4px}
+.npc-line{background:#241a2e;border-left:3px solid #b48ad4;padding:6px 10px;margin:6px 0;border-radius:0 6px 6px 0}
+.npc-line .nm{color:#d9b3f0;font-weight:bold}
+.monster-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.monster-chip{background:#2e1a1a;border:1px solid #8f4a4a;border-radius:6px;padding:6px 10px;font-size:12px}
+.monster-chip b{color:#ff9d9d}
+.boss-mono{background:#120f24;border:1px solid #6a5ad4;border-radius:8px;padding:10px;margin:8px 0}
+.boss-mono .lbl{color:#b3a6ff;font-size:11px;letter-spacing:2px}
+.boss-mono p{margin:6px 0 0;font-style:italic;line-height:1.5}
+.dm-tips{margin:8px 0 0;padding-left:18px;color:#9fb6d8}
+.dm-tips li{margin:4px 0;line-height:1.4}
+.beat-nav{display:flex;gap:6px;margin-top:10px}
+.beat-nav button{flex:1}
+.copilot-card{background:#101a2e;border:1px solid #2a4a8f;border-radius:8px;padding:10px;margin:8px 0;position:relative}
+.copilot-card .dismiss{position:absolute;top:6px;right:6px;background:none!important;border:none!important;
+  color:#8aa;font-size:14px;padding:2px 6px!important}
+.copilot-card ul{margin:6px 0 0;padding-left:18px}
+.copilot-card li{margin:5px 0;line-height:1.4}
+.copilot-actions{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.firstimer-row{display:flex;align-items:center;gap:8px;font-size:13px;color:#9fb6d8}
+.firstimer-row input{width:16px;height:16px}
+.copilot-status{font-size:12px;color:#8aa}
+#copilot-suggest-check{background:#2e4a1a!important;border-color:#6a9d4a!important}
+.guide-loading{color:#ffd97d;font-style:italic}
+
+
+/* ---- Coordinator glue: DM layout, DM chat, player canvas, toolbar placement ---- */
+#dm-layout{display:flex;height:100vh;min-height:0}
+#dm-map-wrap{flex:1;position:relative;min-width:0;min-height:0;background:#0a0805;overflow:hidden}
+#dm-side{width:400px;flex-shrink:0;display:flex;flex-direction:column;min-height:0;background:#0f1420;border-left:1px solid #3a4a6a}
+#dm-chat{border-bottom:1px solid #3a4a6a;padding:8px;display:flex;flex-direction:column;gap:6px}
+#dm-chat .chat-log{max-height:170px;min-height:90px;overflow-y:auto;background:#101623;border:1px solid #2c3a55;border-radius:6px;padding:8px}
+#dm-chat .chat-input-row{display:flex;gap:6px}
+#dm-chat .chat-input-row input{flex:1;background:#1a2233;color:#e8e4d8;border:1px solid #3a4a6a;border-radius:6px;padding:8px}
+#dm-chat .chat-input-row button{background:#2a3a5f;color:#e8e4d8;border:1px solid #4a5f8f;border-radius:6px;padding:8px 12px;cursor:pointer}
+#dm-panels-wrap{flex:1;overflow-y:auto;min-height:0}
+#dm-panels{height:auto !important}
+/* Module 3 toolbar: dock bottom-right over the map, clear of Module 2 toolbars/readout */
+#dmToolbar{top:auto !important;bottom:88px !important;right:12px !important;left:auto !important;justify-content:flex-end;max-width:44%}
+#player-canvas{position:absolute;inset:0;width:100%;height:100%;touch-action:none}
+#pv-mic{width:100%;margin-top:6px;background:#1c2a1c;border:1px solid #3a6a3a;color:#cfe8cf;border-radius:6px;padding:7px;cursor:pointer;font-size:13px}
+@media (max-width:900px){
+  #dm-layout{flex-direction:column}
+  #dm-side{width:100%;max-height:48vh;border-left:none;border-top:1px solid #3a4a6a}
+  /* Bug 11: on narrow screens dm-side is full-width, so dock panels to the right edge */
+  .dm-panel{right:8px !important;max-width:calc(100vw - 16px)}
+}
+
+</style>
+</head>
+<body>
+<!-- ============ Module 1: Shell + Networking + Player View + Chat + Dice ============ -->
+
+<!-- Landing -->
+<div id="landing">
+  <button id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
+  <div class="tavern-frame">
+    <div class="logo">🎲</div>
+    <h1>Game Night</h1>
+    <p class="tagline">A human DM. An AI copilot. Your party.</p>
+    <div class="btn-row">
+      <button id="btn-dm" class="big-btn">🎲 Start as DM</button>
+      <button id="btn-join" class="big-btn">🧙 Join as Player</button>
+    </div>
+
+    <div id="dm-form" class="form-card hidden">
+      <input id="dm-name" placeholder="Your name (DM)" maxlength="40" autocomplete="off">
+      <button id="btn-create-room">Create Room</button>
+    </div>
+
+    <div id="room-created" class="form-card hidden">
+      <label>Share this room code with your party:</label>
+      <div id="room-code-big">----</div>
+      <button id="btn-copy-code">Copy Code</button>
+      <button id="btn-dm-enter">Enter DM View →</button>
+    </div>
+
+    <div id="join-form" class="form-card hidden">
+      <input id="join-code" placeholder="Room code (e.g. Q7ZK)" maxlength="8" autocomplete="off" autocapitalize="characters">
+      <input id="join-name" placeholder="Your name" maxlength="40" autocomplete="off">
+      <input id="join-char" placeholder="Character name (optional)" maxlength="40" autocomplete="off">
+      <button id="btn-join-go">Join Game</button>
+    </div>
+  </div>
+</div>
+
+<!-- Player view -->
+<div id="player-view" class="hidden">
+  <header id="player-topbar">
+    <span class="brand">🎲 Game Night</span>
+    <span id="pv-room">Room ----</span>
+    <span id="pv-name"></span>
+    <span class="spacer"></span>
+    <!-- Bug 12: Settings (API keys) is DM-only — gear removed from player view -->
+  </header>
+  <main id="player-main">
+    <section id="pmap-wrap">
+      <div id="pmap"><canvas id="player-canvas"></canvas></div>
+    </section>
+    <aside id="player-side">
+      <div id="char-card">
+        <input id="cc-name" placeholder="Character name" maxlength="40" autocomplete="off">
+        <input id="cc-class" placeholder="Class (e.g. Rogue)" maxlength="40" autocomplete="off">
+        <div class="hp-row">
+          <button id="hp-minus" aria-label="Lose HP">−</button>
+          <span><b id="hp-cur">20</b> / <span id="hp-max">20</span> HP</span>
+          <button id="hp-plus" aria-label="Gain HP">+</button>
+        </div>
+        <div class="ac-row">
+          <label>Max HP <input id="cc-maxhp" type="number" min="1" max="999" value="20"></label>
+          <label>AC <input id="cc-ac" type="number" min="0" max="99" value="10"></label>
+        </div>
+      </div>
+      <div id="dice-panel">
+        <div id="dice-face">?</div>
+        <div class="dice-btns">
+          <button data-sides="20">d20</button>
+          <button data-sides="12">d12</button>
+          <button data-sides="10">d10</button>
+          <button data-sides="8">d8</button>
+          <button data-sides="6">d6</button>
+          <button data-sides="4">d4</button>
+        </div>
+        <div id="dice-note"></div>
+      </div>
+      <div id="chat-panel">
+        <div id="chat-log" class="chat-log"></div>
+        <div class="chat-input-row">
+          <input id="chat-input" placeholder="Say something…" maxlength="500" autocomplete="off">
+          <button id="btn-send">Send</button>
+        </div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<!-- DM view: hidden mount point owned by the DM-map / DM-tools modules -->
+<div id="dm-view" class="hidden">
+
+<div id="dm-layout">
+  <div id="dm-map-wrap">
+<!-- Module 2: mounted inside G.mapEl -->
+<div id="gn-dmmap-wrap">
+  <canvas id="gn-dmmap-canvas"></canvas>
+
+  <div id="gn-dmmap-toolbar" role="toolbar" aria-label="DM map tools">
+    <button class="gn-dmbtn" data-tool="select" title="Select / drag tokens">✥ Select</button>
+    <button class="gn-dmbtn" data-tool="fog-hide" title="Paint fog (hide areas)">🖌 Hide</button>
+    <button class="gn-dmbtn" data-tool="fog-reveal" title="Erase fog (reveal areas)">🧽 Reveal</button>
+    <button class="gn-dmbtn" data-tool="ruler" title="Measure distance">📏 Ruler</button>
+    <div id="gn-dmmap-fogsize"><label>Brush <input id="gn-dmmap-brushsize" type="range" min="1" max="6" step="1" value="2"></label></div>
+    <div class="gn-dm-sep"></div>
+    <button class="gn-dmbtn" data-tool="fog-reveal-all">☀ Reveal All</button>
+    <button class="gn-dmbtn" data-tool="player-preview">👁 Preview player view</button>
+    <div class="gn-dm-sep"></div>
+    <!-- Bug 10: removed disabled duplicate AoE buttons (aoe-circle/cone/line/square) —
+         the quick-slot AoE panel (🎯 AoE in the DM toolbar) is the working flow -->
+    <button class="gn-dmbtn" data-tool="init-tracker" disabled title="Module 3">⚔ Initiative</button>
+    <button class="gn-dmbtn" data-tool="hp-edit" disabled title="Module 3">❤ HP edit</button>
+    <div class="gn-dm-sep"></div>
+    <!-- Bug 5: DM-only Settings (Groq API key) — players never see this -->
+    <button class="gn-dmbtn" id="btn-settings-dm" title="Settings (Groq API key)">⚙</button>
+  </div>
+
+  <div id="gn-dmmap-rooms"><!-- one-click room reveals injected here --></div>
+
+  <div id="gn-dmmap-readout" hidden></div>
+
+  <div id="gn-dmmap-staging">
+    <span class="gn-stg-label">🎭 Staging tray — drag onto map to introduce</span>
+    <!-- staging token chips injected here -->
+  </div>
+</div>
+
+  </div>
+  <div id="dm-side">
+
+    <div id="dm-chat">
+      <div class="chat-log" id="dm-chat-log"></div>
+      <div class="chat-input-row">
+        <input id="dm-chat-input" maxlength="300" placeholder="Message players…" autocomplete="off" />
+        <button id="dm-chat-send">Send</button>
+      </div>
+    </div>
+    <div id="dm-panels-wrap">
+<!-- Module 4: #dm-panels lives inside Module 1's DM-only container (hidden from players) -->
+<div id="dm-panels">
+  <div>
+    <span class="mic-ind off" id="mic-ind"><span class="dot" style="display:none"></span><span id="mic-txt">🎙 mic unavailable</span></span>
+    <button id="mic-toggle" style="display:none;margin-left:6px;font-size:12px">🎙 Start listening</button>
+  </div>
+
+  <!-- DM Guide -->
+  <div class="guide-seed-row">
+    <input id="guide-seed" placeholder='Campaign seed, e.g. "goblin ambush on the road to Phandalin"' />
+    <button id="guide-gen">✨ Build guide</button>
+  </div>
+  <div id="guide-panel"><p class="guide-loading">Enter a seed above and hit "Build guide".</p></div>
+
+  <!-- AI Copilot -->
+  <div class="firstimer-row">
+    <label><input type="checkbox" id="firstimer" /> New DM tips (beginner scaffolding)</label>
+  </div>
+  <div class="copilot-actions">
+    <button id="copilot-refresh">🤖 Ask copilot now</button>
+    <button id="copilot-suggest-check">🎲 Suggest check</button>
+  </div>
+  <div class="copilot-status" id="copilot-status">Copilot idle.</div>
+  <div id="copilot-panel"></div>
+</div>
+
+    </div>
+  </div>
+</div>
+<!-- Module 3 toolbar: Module 2 may render its own placeholder buttons with data-tool attrs;
+     initDMTools() wires ALL button[data-tool] on the page. -->
+<div id="dmToolbar" class="dm-toolbar" role="toolbar" aria-label="DM quick-slot tools">
+  <button data-tool="aoe" title="AoE spell templates">🎯 AoE</button>
+  <button data-tool="monster" title="Monster quick creator">👹 Monster</button>
+  <button data-tool="npc" title="NPC creator">🧑 NPC</button>
+  <button data-tool="init" title="Initiative tracker">⚔️ Init</button>
+  <button data-tool="sfx" title="Sound effects">🔊 SFX</button>
+  <button data-tool="handout" title="Handouts">📜 Handout</button>
+</div>
+
+<div id="dmPanels">
+  <!-- AoE -->
+  <section class="dm-panel" data-panel="aoe" hidden>
+    <h3>🎯 AoE Spell Template<button class="dm-panel-close" data-close="aoe" title="Close">✕</button></h3>
+    <label>Shape</label>
+    <div class="dm-shapes" id="aoeShapes">
+      <button class="dm-btn sel" data-shape="circle">Circle</button>
+      <button class="dm-btn" data-shape="cone">Cone</button>
+      <button class="dm-btn" data-shape="line">Line</button>
+      <button class="dm-btn" data-shape="cube">Cube</button>
+    </div>
+    <label>Size (5e presets)</label>
+    <div class="dm-presets" id="aoeSizes">
+      <button class="dm-btn" data-size="15">15 ft</button>
+      <button class="dm-btn sel" data-size="20">20 ft</button>
+      <button class="dm-btn" data-size="30">30 ft</button>
+      <button class="dm-btn" data-size="60">60 ft</button>
+    </div>
+    <div class="dm-row">
+      <button class="dm-btn primary" id="aoePlace">📐 Place on map</button>
+      <button class="dm-btn danger" id="aoeClear">🧹 Clear</button>
+    </div>
+    <div class="dm-row" id="aoeConfirmRow" hidden>
+      <button class="dm-btn primary" id="aoeConfirm">✔ Confirm</button>
+      <button class="dm-btn" id="aoeCancel">✖ Cancel</button>
+    </div>
+    <div class="dm-status" id="aoeStatus">Pick a shape + size, then “Place on map”.</div>
+  </section>
+
+  <!-- Monster -->
+  <section class="dm-panel" data-panel="monster" hidden>
+    <h3>👹 Monster Creator<button class="dm-panel-close" data-close="monster" title="Close">✕</button></h3>
+    <label>Name</label><input type="text" id="mName" placeholder="Goblin Boss">
+    <div class="dm-row">
+      <div><label>HP</label><input type="number" id="mHp" value="30"></div>
+      <div><label>AC</label><input type="number" id="mAc" value="13"></div>
+      <div><label>Speed</label><input type="text" id="mSpeed" value="30 ft"></div>
+    </div>
+    <h4>Attack 1</h4>
+    <div class="dm-row">
+      <div><label>Name</label><input type="text" id="mA1n" placeholder="Scimitar"></div>
+      <div><label>+Hit</label><input type="number" id="mA1h" value="4"></div>
+      <div><label>Damage</label><input type="text" id="mA1d" placeholder="1d6+2"></div>
+    </div>
+    <h4>Attack 2 <span class="sub">(optional)</span></h4>
+    <div class="dm-row">
+      <div><label>Name</label><input type="text" id="mA2n" placeholder="Shortbow"></div>
+      <div><label>+Hit</label><input type="number" id="mA2h" value="4"></div>
+      <div><label>Damage</label><input type="text" id="mA2d" placeholder="1d6+2"></div>
+    </div>
+    <label>Special trait</label><input type="text" id="mTrait" placeholder="Nimble Escape: Disengage or Hide as bonus action">
+    <div class="dm-row">
+      <button class="dm-btn primary" id="mAddMap">➕ Add to map</button>
+      <button class="dm-btn" id="mSave">💾 Save</button>
+    </div>
+    <button class="dm-btn" id="mSendGuide" style="width:100%">📖 Send to guide</button>
+    <h4>Bestiary (re-drop anytime)</h4>
+    <ul class="dm-list" id="bestiaryList"></ul>
+  </section>
+
+  <!-- NPC -->
+  <section class="dm-panel" data-panel="npc" hidden>
+    <h3>🧑 NPC Creator<button class="dm-panel-close" data-close="npc" title="Close">✕</button></h3>
+    <label>Name</label><input type="text" id="nName" placeholder="Mira Thistledown">
+    <label>Role</label><input type="text" id="nRole" placeholder="Suspicious innkeeper">
+    <label>Personality (1 line)</label><input type="text" id="nPersonality" placeholder="Cheerful but watches the door">
+    <label>Voice note</label><input type="text" id="nVoice" placeholder="Raspy whisper, talks fast">
+    <label>Secret (DM-only)</label><input type="text" id="nSecret" placeholder="Poisons the rival tavern's ale">
+    <button class="dm-btn primary" id="nAdd" style="width:100%;margin-top:6px">➕ Add NPC</button>
+    <h4>NPC Roster</h4>
+    <ul class="dm-list" id="npcList"></ul>
+    <div id="npcCard"></div>
+  </section>
+
+  <!-- Initiative -->
+  <section class="dm-panel" data-panel="init" hidden>
+    <h3>⚔️ Initiative Tracker<button class="dm-panel-close" data-close="init" title="Close">✕</button></h3>
+    <div class="dm-row">
+      <button class="dm-btn primary" id="iRoll">🎲 Roll all</button>
+      <button class="dm-btn" id="iSort">⇅ Sort</button>
+    </div>
+    <div class="dm-row">
+      <button class="dm-btn" id="iNext">⏭ Next turn</button>
+      <button class="dm-btn danger" id="iClear">Clear</button>
+    </div>
+    <div class="dm-row">
+      <select id="iTokenPick"></select>
+      <button class="dm-btn" id="iAdd">➕ Add</button>
+    </div>
+    <ul class="dm-list" id="initList"></ul>
+    <div class="dm-status" id="initStatus"></div>
+  </section>
+
+  <!-- SFX -->
+  <section class="dm-panel" data-panel="sfx" hidden>
+    <h3>🔊 Sound Effects<button class="dm-panel-close" data-close="sfx" title="Close">✕</button></h3>
+    <label>Ambience (loops — toggle)</label>
+    <div class="dm-sfx-grid">
+      <button class="dm-btn" data-sfx="tavern">🍺 Tavern</button>
+      <button class="dm-btn" data-sfx="drums">🥁 Battle Drums</button>
+    </div>
+    <label>One-shots</label>
+    <div class="dm-sfx-grid">
+      <button class="dm-btn" data-sfx="creak">🚪 Door Creak</button>
+      <button class="dm-btn" data-sfx="clash">⚔️ Sword Clash</button>
+      <button class="dm-btn" data-sfx="zap">✨ Magic Zap</button>
+      <button class="dm-btn" data-sfx="roar">🐉 Dragon Roar</button>
+      <button class="dm-btn" data-sfx="fanfare">🎺 Victory</button>
+    </div>
+    <div class="dm-status">All sounds are synthesized live — no audio files. Players hear them too.</div>
+  </section>
+
+  <!-- Handout -->
+  <section class="dm-panel" data-panel="handout" hidden>
+    <h3>📜 Handouts<button class="dm-panel-close" data-close="handout" title="Close">✕</button></h3>
+    <label>Title</label><input type="text" id="hTitle" placeholder="Torn Letter">
+    <label>Text</label><textarea id="hBody" placeholder="The handwriting is shaky…"></textarea>
+    <label>Image URL (optional)</label><input type="text" id="hImg" placeholder="https://…">
+    <button class="dm-btn primary" id="hSend" style="width:100%">📤 Send to players</button>
+    <h4>Sent history</h4>
+    <ul class="dm-list" id="handoutList"></ul>
+  </section>
+</div>
+
+</div>
+
+<!-- Settings -->
+<div id="settings-modal" class="hidden">
+  <div class="modal-card">
+    <h2>⚙ Settings</h2>
+    <label>Groq API key
+      <input id="set-groq" type="password" placeholder="gsk_…" autocomplete="off">
+    </label>
+    <p class="hint">Free at groq.com — powers the AI copilot.</p>
+    <label>DM model
+      <input id="set-model" placeholder="llama-3.3-70b-versatile" autocomplete="off">
+    </label>
+    <div class="modal-btns">
+      <button id="btn-close-settings">Close</button>
+      <button id="btn-save-settings">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   Game Night — Module 1: Shell + Networking + Player View + Chat + Dice
+   Exposes: window.G (state), window.GN (API)
+   ===================================================================== */
+(function () {
+'use strict';
+
+/* ---------------- Global state ---------------- */
+window.G = {
+  role: null,        // 'dm' | 'player'
+  name: '',
+  code: '',
+  peerId: 'p-' + Math.random().toString(36).slice(2),
+  ws: null,
+  settings: { groqKey: '', dmModel: 'llama-3.3-70b-versatile' },
+  transcript: [],    // [{from, text, ts}]
+  onPlayerText: null,// hooked by the AI module (listening buffer)
+  mapEl: null,       // #pmap mount point for the DM-map module (set on init)
+  mapState: null,    // last welcome mapState (DM-map module renders from this)
+  tokensVisible: true,
+  getWelcomeState: null, // DM module sets: () => ({mapState, tokensVisible})
+  player: { charName: '', charClass: '', hp: 20, maxHp: 20, ac: 10 }
+};
+var G = window.G;
+var GN = window.GN = {};
+
+/* ---------------- Settings ---------------- */
+var SETTINGS_KEY = 'gn-settings';
+
+function loadSettings() {
+  try {
+    var raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) {
+      var s = JSON.parse(raw);
+      if (s.groqKey) G.settings.groqKey = s.groqKey;
+      if (s.dmModel) G.settings.dmModel = s.dmModel;
+    }
+  } catch (e) { /* corrupted settings: start fresh */ }
+}
+
+function saveSettings() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(G.settings)); }
+  catch (e) { /* storage blocked/full */ }
+}
+
+function openSettings() {
+  document.getElementById('set-groq').value = G.settings.groqKey || '';
+  document.getElementById('set-model').value = G.settings.dmModel || '';
+  document.getElementById('settings-modal').classList.remove('hidden');
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal').classList.add('hidden');
+}
+
+/* ---------------- Networking ---------------- */
+var WS_URL = 'wss://game-night-server.onrender.com';
+
+function topic() {
+  return 'gamenight-' + String(G.code || '').toLowerCase();
+}
+
+var ws = null;
+var wsBackoff = 1000;   // ms, doubles on each failure up to 30s
+var wsWantOpen = false;
+var netHandlers = [];   // subscriber callbacks from other modules
+
+GN.onNetEvent = function (cb) { netHandlers.push(cb); };
+
+
+/* ============ Networking: real server protocol ============
+   Every message carries `code` (uppercased). The server:
+   - on {type:'host-ready', code}      -> registers DM, replies {type:'room-ready'}
+   - on {type:'join-request', code, name, clientId} -> adds guest, forwards to DM
+   - DM replies {type:'join-accepted', code, name, clientId, event} -> forwarded to that guest
+   - {type:'game-event', code, sender, direction, target?, event} -> broadcast per direction
+*/
+function sendRaw(msg) {
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify(msg));
+    return true;
+  }
+  return false;
+}
+
+/* DM (host) -> all guests */
+GN.netBroadcast = function (ev) {
+  sendRaw({ type: 'game-event', code: G.code, sender: G.peerId, direction: 'to-guests', event: ev });
+};
+
+/* player -> DM (host) */
+GN.netToHost = function (ev) {
+  sendRaw({ type: 'game-event', code: G.code, sender: G.peerId, direction: 'to-host', event: ev });
+};
+
+/* DM (host) -> one guest */
+GN.netToGuest = function (peerId, ev) {
+  sendRaw({ type: 'game-event', code: G.code, sender: G.peerId, direction: 'to-guest', target: peerId, event: ev });
+};
+
+function scheduleReconnect() {
+  if (!wsWantOpen) return;
+  setTimeout(openWS, wsBackoff);
+  wsBackoff = Math.min(wsBackoff * 2, 30000);
+}
+
+function openWS() {
+  if (!wsWantOpen) return;
+  var sock;
+  try { sock = new WebSocket(WS_URL); }
+  catch (e) { scheduleReconnect(); return; }
+  ws = sock;
+  G.ws = sock;
+
+  sock.onopen = function () {
+    wsBackoff = 1000;
+    if (G.role === 'dm') {
+      sendRaw({ type: 'host-ready', code: G.code });
+    } else {
+      sendRaw({ type: 'join-request', code: G.code, name: G.name, clientId: G.peerId });
+    }
+  };
+  sock.onmessage = function (e) {
+    var msg;
+    try { msg = JSON.parse(e.data); } catch (err) { return; }
+    routeMsg(msg);
+  };
+  sock.onclose = scheduleReconnect;
+  sock.onerror = function () { try { sock.close(); } catch (e) {} };
+}
+
+GN.connect = function () { wsWantOpen = true; wsBackoff = 1000; openWS(); };
+GN.disconnect = function () {
+  wsWantOpen = false;
+  if (ws) { try { ws.close(); } catch (e) {} }
+  ws = null; G.ws = null;
+};
+
+function routeMsg(msg) {
+  if (!msg || !msg.type) return;
+  if (msg.type === 'room-ready' && G.role === 'dm') {
+    addChat('\uD83D\uDCDC System', 'Room ' + G.code + ' is live \u2014 share the code.', 'sys');
+    return;
+  }
+  if (msg.type === 'join-request' && G.role === 'dm') { dmOnJoinRequest(msg); return; }
+  if (msg.type === 'join-accepted' && G.role === 'player') {
+    if (msg.clientId && msg.clientId !== G.peerId) return;
+    onWelcome(msg.event || {});
+    return;
+  }
+  if (msg.type === 'join-rejected' && G.role === 'player') {
+    addChat('\uD83D\uDCDC System', 'Room not found \u2014 check the code and try again.', 'sys');
+    return;
+  }
+  if (msg.type === 'game-event' && msg.event) { dispatchNet(msg); return; }
+  /* 'error' type: ignore silently */
+}
+
+function dispatchNet(msg) {
+  var ev = msg.event, sender = msg.sender, dir = msg.direction;
+  if (sender === G.peerId) return; /* ignore our own echo */
+  var mine = false;
+  if (G.role === 'dm') {
+    mine = (dir === 'to-host' || dir === 'to-guests');
+  } else {
+    mine = (dir === 'to-guests') || (dir === 'to-guest' && msg.target === G.peerId);
+  }
+  if (!mine) return;
+  for (var i = 0; i < netHandlers.length; i++) {
+    try { netHandlers[i](ev, sender, msg); } catch (e) {}
+  }
+}
+
+/* --- room join handshake (server-native) --- */
+var guests = {};
+GN.guests = guests;
+
+function pickColor() {
+  var cols = ['#c96', '#6cf', '#c6f', '#6fc', '#fc6', '#f66'];
+  return cols[Object.keys(guests).length % cols.length];
+}
+
+function dmOnJoinRequest(msg) {
+  var pid = msg.clientId || msg.sender;
+  if (!pid) return;
+  guests[pid] = { name: msg.name || '???', charName: msg.name || '???', joined: Date.now() };
+  addChat('\uD83D\uDCDC System', (msg.name || 'A player') + ' joined the table.', 'sys');
+  if (window.__dmApi && typeof window.__dmApi.addToken === 'function') {
+    try {
+      window.__dmApi.addToken({
+        label: msg.name || 'Player', ownerPeerId: pid, color: pickColor(),
+        x: 2 + ((Object.keys(guests).length * 2) % 10), y: 2, hp: 20, maxHp: 20, speed: 30
+      });
+    } catch (e) {}
+  }
+  var welcome = { t: 'welcome' };
+  if (typeof G.getWelcomeState === 'function') {
+    try { welcome = Object.assign({ t: 'welcome' }, G.getWelcomeState()); } catch (e) {}
+  }
+  sendRaw({ type: 'join-accepted', code: G.code, name: msg.name, clientId: pid, event: welcome });
+}
+
+function onWelcome(ev) {
+  addChat('\uD83D\uDCDC System', 'Connected to the table.', 'sys');
+  if (typeof window.__onWelcome === 'function') {
+    try { window.__onWelcome(ev); } catch (e) {}
+  }
+}
+
+/* ---------------- Chat ---------------- */
+function addChat(from, text, cls) {
+  G.transcript.push({ from: from, who: from, text: text, ts: Date.now() });
+  var logs = document.querySelectorAll('.chat-log');
+  for (var i = 0; i < logs.length; i++) {
+    var d = document.createElement('div');
+    d.className = 'chat-msg ' + (cls || '');
+    var b = document.createElement('b');
+    b.textContent = from + ': ';
+    var s = document.createElement('span');
+    s.textContent = text;
+    d.appendChild(b);
+    d.appendChild(s);
+    logs[i].appendChild(d);
+    logs[i].scrollTop = logs[i].scrollHeight;
+  }
+}
+GN.addChat = addChat;
+
+function sendChat() {
+  var input = document.getElementById('chat-input');
+  var text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  addChat(G.name || 'You', text, 'me');
+  // AI module listening buffer hook
+  if (typeof G.onPlayerText === 'function') {
+    try { G.onPlayerText(G.name, text); } catch (e) {}
+  }
+  if (G.role === 'player') {
+    GN.netToHost({ t: 'chat', from: G.name, text: text });
+  } else {
+    GN.netBroadcast({ t: 'chat', from: G.name || 'DM', text: text });
+  }
+}
+GN.sendChat = sendChat;
+
+/* ---------------- Dice ---------------- */
+var rolling = false;
+
+function rollDice(sides) {
+  if (rolling) return;
+  rolling = true;
+  var face = document.getElementById('dice-face');
+  var note = document.getElementById('dice-note');
+  var ticks = 0, maxTicks = 10;
+  var timer = setInterval(function () {
+    face.textContent = 1 + Math.floor(Math.random() * sides);
+    face.classList.add('shaking');
+    ticks++;
+    if (ticks >= maxTicks) {
+      clearInterval(timer);
+      face.classList.remove('shaking');
+      var result = 1 + Math.floor(Math.random() * sides);
+      face.textContent = result;
+      note.textContent = 'd' + sides + ' → ' + result;
+      rolling = false;
+      var label = '🎲 ' + (G.name || 'Player');
+      addChat(label, 'rolled d' + sides + ': ' + result, 'dice');
+      var ev = { t: 'dice', from: G.name, sides: sides, result: result };
+      if (G.role === 'player') GN.netToHost(ev);
+      else GN.netBroadcast(ev);
+    }
+  }, 70);
+}
+GN.rollDice = rollDice;
+
+/* ---------------- Character card ---------------- */
+function setHP(hp) {
+  var p = G.player;
+  p.hp = Math.max(0, Math.min(p.maxHp, hp));
+  document.getElementById('hp-cur').textContent = p.hp;
+}
+GN.setHP = setHP;
+
+/* ---------------- Views ---------------- */
+var VIEWS = ['landing', 'dm-view', 'player-view'];
+
+function showView(name) {
+  VIEWS.forEach(function (v) {
+    document.getElementById(v).classList.toggle('hidden', v !== name);
+  });
+}
+GN.showView = showView;
+GN.openSettings = openSettings; // Bug 5: exposed for DM toolbar gear (Module 2)
+
+function makeRoomCode() {
+  var chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  var out = '';
+  for (var i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+function enterPlayerView() {
+  G.role = 'player';
+  document.getElementById('pv-room').textContent = 'Room ' + G.code;
+  document.getElementById('pv-name').textContent = G.name;
+  GN.showView('player-view');
+  GN.connect();
+}
+
+function enterDMView() {
+  G.role = 'dm';
+  GN.showView('dm-view');
+  GN.connect();
+}
+
+/* ---------------- Wire-up ---------------- */
+function $(id) { return document.getElementById(id); }
+
+function init() {
+  loadSettings();
+  G.mapEl = $('pmap'); // mount point for the DM-map module
+
+  // Bug 9: offer rejoin if a session exists from before reload
+  try {
+    var sess = JSON.parse(sessionStorage.getItem('gn-session') || 'null');
+    if (sess && sess.code && sess.role) {
+      var land = $('landing');
+      var rejoin = document.createElement('div');
+      rejoin.className = 'form-card';
+      rejoin.style.cssText = 'margin-top:12px;border-color:#ffd75e';
+      rejoin.innerHTML = '<div style="margin-bottom:8px">🔄 <b>Rejoin room ' + String(sess.code).replace(/</g, '&lt;') + '</b> as ' + (sess.role === 'dm' ? 'DM' : 'Player') + ' (' + String(sess.name || '').replace(/</g, '&lt;') + ')?</div>';
+      var btn = document.createElement('button');
+      btn.className = 'big-btn';
+      btn.textContent = sess.role === 'dm' ? '🎲 Rejoin as DM →' : '🧙 Rejoin as Player →';
+      btn.onclick = function () {
+        G.code = sess.code; G.name = sess.name;
+        if (sess.role === 'dm') { enterDMView(); }
+        else {
+          G.player.charName = sess.charName || sess.name;
+          $('cc-name').value = G.player.charName;
+          enterPlayerView();
+        }
+      };
+      var dismiss = document.createElement('button');
+      dismiss.textContent = 'Start fresh instead';
+      dismiss.style.cssText = 'margin-top:6px;background:none;border:none;color:#8a8f9f;cursor:pointer;font-size:13px';
+      dismiss.onclick = function () { try { sessionStorage.removeItem('gn-session'); } catch (e) {} rejoin.remove(); };
+      rejoin.appendChild(btn); rejoin.appendChild(document.createElement('br')); rejoin.appendChild(dismiss);
+      land.appendChild(rejoin);
+    }
+  } catch (e) { /* no session or storage blocked */ }
+
+  // landing: reveal forms
+  $('btn-dm').addEventListener('click', function () {
+    $('dm-form').classList.remove('hidden');
+    $('join-form').classList.add('hidden');
+    $('room-created').classList.add('hidden');
+    $('dm-name').focus();
+  });
+  $('btn-join').addEventListener('click', function () {
+    $('join-form').classList.remove('hidden');
+    $('dm-form').classList.add('hidden');
+    $('room-created').classList.add('hidden');
+    $('join-code').focus();
+  });
+
+  // DM path: name -> create room -> show code -> enter
+  $('btn-create-room').addEventListener('click', function () {
+    var name = $('dm-name').value.trim();
+    if (!name) { $('dm-name').focus(); return; }
+    G.name = name;
+    G.code = makeRoomCode();
+    // Bug 9: persist session for reload recovery
+    try { sessionStorage.setItem('gn-session', JSON.stringify({ code: G.code, role: 'dm', name: name })); } catch (e) {}
+    $('room-code-big').textContent = G.code;
+    $('btn-copy-code').textContent = 'Copy Code';
+    $('dm-form').classList.add('hidden');
+    $('room-created').classList.remove('hidden');
+  });
+  $('dm-name').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('btn-create-room').click();
+  });
+  $('btn-copy-code').addEventListener('click', function () {
+    var done = function () { $('btn-copy-code').textContent = 'Copied!'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(G.code).then(done, done);
+    } else { done(); }
+  });
+  $('btn-dm-enter').addEventListener('click', function () {
+    if (!G.code || !G.name) return;
+    enterDMView();
+  });
+
+  // player path: code + name -> join
+  $('btn-join-go').addEventListener('click', function () {
+    var code = $('join-code').value.trim().toUpperCase();
+    var name = $('join-name').value.trim();
+    if (!code || !name) { ($(code ? 'join-name' : 'join-code')).focus(); return; }
+    G.code = code;
+    G.name = name;
+    G.player.charName = $('join-char').value.trim() || name;
+    // Bug 9: persist session for reload recovery
+    try { sessionStorage.setItem('gn-session', JSON.stringify({ code: code, role: 'player', name: name, charName: G.player.charName })); } catch (e) {}
+    $('cc-name').value = G.player.charName;
+    enterPlayerView();
+  });
+  $('join-code').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('btn-join-go').click();
+  });
+  $('join-name').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') $('btn-join-go').click();
+  });
+
+  // chat send
+  $('btn-send').addEventListener('click', sendChat);
+  $('chat-input').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') sendChat();
+  });
+
+  // dice buttons
+  var diceBtns = document.querySelectorAll('#dice-panel button[data-sides]');
+  for (var i = 0; i < diceBtns.length; i++) {
+    (function (btn) {
+      btn.addEventListener('click', function () {
+        rollDice(parseInt(btn.getAttribute('data-sides'), 10));
+      });
+    })(diceBtns[i]);
+  }
+
+  // character card
+  $('hp-minus').addEventListener('click', function () { setHP(G.player.hp - 1); });
+  $('hp-plus').addEventListener('click', function () { setHP(G.player.hp + 1); });
+  $('cc-maxhp').addEventListener('change', function () {
+    var v = parseInt($('cc-maxhp').value, 10);
+    if (isNaN(v) || v < 1) v = 1;
+    G.player.maxHp = v;
+    $('hp-max').textContent = v;
+    setHP(G.player.hp);
+  });
+  $('cc-ac').addEventListener('change', function () {
+    var v = parseInt($('cc-ac').value, 10);
+    G.player.ac = isNaN(v) ? 10 : v;
+  });
+  $('cc-name').addEventListener('change', function () {
+    G.player.charName = $('cc-name').value.trim();
+  });
+  $('cc-class').addEventListener('change', function () {
+    G.player.charClass = $('cc-class').value.trim();
+  });
+
+  // settings
+  $('btn-settings').addEventListener('click', openSettings);
+  // Bug 12: btn-settings-p removed from player view (DM-only settings)
+  $('btn-close-settings').addEventListener('click', closeSettings);
+  $('settings-modal').addEventListener('click', function (e) {
+    if (e.target === $('settings-modal')) closeSettings();
+  });
+  $('btn-save-settings').addEventListener('click', function () {
+    G.settings.groqKey = $('set-groq').value.trim();
+    G.settings.dmModel = $('set-model').value.trim() || 'llama-3.3-70b-versatile';
+    saveSettings();
+    closeSettings();
+  });
+
+  showView('landing');
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}
+
+})();
+
+/* Module 2 — DM Map Canvas. Requires from Module 1: G, G.role ('dm'),
+   G.mapEl (mount point), G.netBroadcast(ev).
+   Owlbear-style static fog + Foundry-style drag ruler. */
+'use strict';
+(function () {
+  const FT = 5;                 // feet per grid square
+  const GLIDE_MS = 250;         // token glide duration
+  const DM_FOG_ALPHA = 0.55;    // fog opacity seen by the DM
+
+  let G = null, canvas = null, ctx = null, wrap = null;
+  let tool = 'select';
+  let previewPlayer = false;    // player-view preview toggle
+  let cam = { x: 0, y: 0, scale: 1 };   // pan/zoom
+  let currentMap = null;        // active map def
+  let dragTok = null, dragRuler = null; // live drag state
+  let rulerPts = null;          // standalone ruler waypoints
+  let fogDirty = true, dirty = true;
+  let hoverTok = null;
+
+  // ---------- procedural maps ----------
+  const TILE = 64;              // px per grid square at scale 1
+  function rect(x, y, w, h, kind) { return { x, y, w, h, kind }; }
+  const MAPS = {
+    tavern: {
+      name: 'Tavern',
+      cols: 16, rows: 11,
+      floors: ['#6b4f2e', '#74563'],
+      rooms: [
+        rect(0, 0, 16, 11, 'floor'),
+        rect(0, 0, 11, 8, 'floor2'),
+        rect(11, 0, 5, 11, 'floor'),
+        rect(0, 8, 11, 3, 'floor3'),
+      ],
+      walls: [
+        rect(10, 0, 1, 6, 'wall'), rect(11, 6, 5, 1, 'wall'),
+        rect(10, 8, 1, 3, 'wall'), rect(0, 7, 11, 1, 'wall'),
+        rect(4, 7, 1, 1, 'door'), rect(11, 5, 1, 1, 'door'),
+        rect(14, 11, 1, 1, 'door'),
+      ],
+      props: [{ x: 3, y: 3, w: 3, h: 2, c: '#4a3520' }, { x: 7, y: 4, w: 2, h: 1, c: '#4a3520' }],
+      reveals: [
+        { label: 'Tavern Hall', x: 0, y: 0, w: 10, h: 7 },
+        { label: 'Cellar', x: 0, y: 8, w: 10, h: 3 },
+        { label: 'Back Room', x: 11, y: 6, w: 5, h: 5 },
+      ],
+    },
+    dungeon: {
+      name: 'Dungeon',
+      cols: 14, rows: 11,
+      rooms: [
+        rect(0, 0, 14, 11, 'floor'),
+        rect(1, 1, 4, 3, 'floor2'), rect(8, 1, 5, 3, 'floor2'),
+        rect(1, 7, 4, 3, 'floor2'), rect(8, 7, 5, 3, 'floor2'),
+      ],
+      walls: [
+        rect(1, 1, 4, 1, 'wall'), rect(1, 3, 4, 1, 'wall'), rect(1, 1, 1, 3, 'wall'),
+        rect(4, 1, 1, 3, 'wall'), rect(3, 2, 1, 1, 'door'),
+        rect(8, 1, 5, 1, 'wall'), rect(8, 3, 5, 1, 'wall'), rect(8, 1, 1, 3, 'wall'),
+        rect(12, 1, 1, 3, 'wall'), rect(10, 2, 1, 1, 'door'),
+        rect(1, 7, 4, 1, 'wall'), rect(1, 9, 4, 1, 'wall'), rect(1, 7, 1, 3, 'wall'),
+        rect(4, 7, 1, 3, 'wall'), rect(2, 8, 1, 1, 'door'),
+        rect(8, 7, 5, 1, 'wall'), rect(8, 9, 5, 1, 'wall'), rect(8, 7, 1, 3, 'wall'),
+        rect(12, 7, 1, 3, 'wall'), rect(11, 8, 1, 1, 'door'),
+        rect(5, 5, 3, 1, 'wall'),
+      ],
+      props: [{ x: 9, y: 2, w: 1, h: 1, c: '#3d3226' }],
+      reveals: [
+        { label: 'NW Cell', x: 1, y: 1, w: 4, h: 3 },
+        { label: 'NE Cell', x: 8, y: 1, w: 5, h: 3 },
+        { label: 'SW Cell', x: 1, y: 7, w: 4, h: 3 },
+        { label: 'SE Cell', x: 8, y: 7, w: 5, h: 3 },
+      ],
+    },
+    cave: {
+      name: 'Cave',
+      cols: 15, rows: 11,
+      rooms: [rect(0, 0, 15, 11, 'floor')],
+      walls: [],
+      caveBlobs: true,
+      props: [{ x: 5, y: 5, w: 2, h: 2, c: '#2e2a24' }, { x: 11, y: 3, w: 2, h: 1, c: '#2e2a24' }],
+      reveals: [
+        { label: 'Cave Mouth', x: 0, y: 3, w: 5, h: 5 },
+        { label: 'Deep Chamber', x: 7, y: 2, w: 8, h: 7 },
+      ],
+    },
+    blank: {
+      name: 'Blank',
+      cols: 16, rows: 11,
+      rooms: [rect(0, 0, 16, 11, 'floor')],
+      walls: [],
+      props: [],
+      reveals: [{ label: 'Whole Map', x: 0, y: 0, w: 16, h: 11 }],
+    },
+  };
+  const FLOOR_C = { floor: '#5c4a2f', floor2: '#675433', floor3: '#524127' };
+
+  // ---------- helpers ----------
+  const key = (x, y) => x + ',' + y;
+  function gridFromPx(px, py) {
+    const r = canvas.getBoundingClientRect();
+    const wx = (px - r.left - cam.x) / cam.scale, wy = (py - r.top - cam.y) / cam.scale;
+    return { x: Math.floor(wx / TILE), y: Math.floor(wy / TILE) };
+  }
+  function pxFromGrid(gx, gy) { return { x: gx * TILE + TILE / 2, y: gy * TILE + TILE / 2 }; }
+  function screenFromWorld(wx, wy) { return { x: wx * cam.scale + cam.x, y: wy * cam.scale + cam.y }; }
+  function distFt(ax, ay, bx, by) { return Math.round(Math.hypot(bx - ax, by - ay) * FT); }
+
+  // ---------- fog ----------
+  function fogSet(cx, cy, r, hide) {
+    const cols = currentMap.cols, rows = currentMap.rows;
+    for (let gx = Math.floor(cx - r); gx <= Math.ceil(cx + r); gx++) {
+      for (let gy = Math.floor(cy - r); gy <= Math.ceil(cy + r); gy++) {
+        if (gx < 0 || gy < 0 || gx >= cols || gy >= rows) continue;
+        if (Math.hypot(gx + 0.5 - cx, gy + 0.5 - cy) > r + 0.35) continue;
+        const k = key(gx, gy);
+        if (hide) {
+          // explored memory: never re-fog an already-revealed cell
+          if (!G.fogRevealed.has(k)) G.fogHidden.add(k);
+        } else {
+          G.fogHidden.delete(k);
+          G.fogRevealed.add(k);
+        }
+      }
+    }
+    fogDirty = dirty = true;
+    G.pushFog();
+  }
+  function revealRect(r) {
+    for (let gx = r.x; gx < r.x + r.w; gx++)
+      for (let gy = r.y; gy < r.y + r.h; gy++) {
+        G.fogHidden.delete(key(gx, gy));
+        G.fogRevealed.add(key(gx, gy));
+      }
+    fogDirty = dirty = true;
+    G.pushFog();
+  }
+
+  // ---------- tokens ----------
+  function tokenAt(gx, gy) {
+    for (let i = G.tokens.length - 1; i >= 0; i--) {
+      const t = G.tokens[i];
+      if (t.staging) continue;
+      const s = t.size || 1;
+      if (gx >= t.x && gx < t.x + s && gy >= t.y && gy < t.y + s) return t;
+    }
+    return null;
+  }
+  function glideToken(t, tx, ty) {
+    const from = { x: t.x, y: t.y }, t0 = performance.now();
+    cancelAnimationFrame(t._glide);
+    const step = (now) => {
+      const p = Math.min(1, (now - t0) / GLIDE_MS);
+      const e = 1 - Math.pow(1 - p, 3); // easeOutCubic
+      t.rx = from.x + (tx - from.x) * e;
+      t.ry = from.y + (ty - from.y) * e;
+      dirty = true;
+      if (p < 1) t._glide = requestAnimationFrame(step);
+      else { t.x = tx; t.y = ty; t.rx = tx; t.ry = ty; G.pushTokens(); }
+    };
+    t._glide = requestAnimationFrame(step);
+  }
+
+  // ---------- push helpers (Module 1's netBroadcast sends these) ----------
+  function makePushers() {
+    G.fogRevealed = G.fogRevealed instanceof Set ? G.fogRevealed : new Set();
+    G.fogHidden = G.fogHidden instanceof Set ? G.fogHidden : new Set();
+    G.tokens = Array.isArray(G.tokens) ? G.tokens : [];
+    G.pushFog = () => G.netBroadcast({ t: 'fog', revealed: [...G.fogRevealed], map: G.mapName || 'blank' });
+    G.pushTokens = () => G.netBroadcast({
+      t: 'tokens',
+      tokens: G.tokens
+        .filter(t => !t.hidden && !t.staging)
+        .map(t => ({ id: t.id, label: t.label, x: t.x, y: t.y, hp: t.hp, maxHp: t.maxHp, color: t.color, size: t.size, ownerPeerId: t.ownerPeerId })),
+    });
+  }
+
+  // ---------- map pick ----------
+  function pickMap(name) {
+    currentMap = MAPS[name] || MAPS.blank;
+    G.mapName = name || 'blank';
+    // fresh map => fresh fog: everything hidden until revealed
+    G.fogRevealed = new Set(); G.fogHidden = new Set();
+    fogDirty = dirty = true;
+    buildRoomButtons();
+    G.pushFog();
+  }
+
+  function buildRoomButtons() {
+    const box = wrap.querySelector('#gn-dmmap-rooms');
+    box.innerHTML = '';
+    currentMap.reveals.forEach(r => {
+      const b = document.createElement('button');
+      b.className = 'gn-dmbtn'; b.textContent = '🏠 ' + r.label;
+      b.onclick = () => revealRect(r);
+      box.appendChild(b);
+    });
+  }
+
+  // ---------- staging tray ----------
+  function buildStaging() {
+    const tray = wrap.querySelector('#gn-dmmap-staging');
+    tray.querySelectorAll('.gn-stg-tok').forEach(e => e.remove());
+    G.tokens.filter(t => t.staging).forEach(t => {
+      const chip = document.createElement('button');
+      chip.className = 'gn-dmbtn gn-stg-tok';
+      chip.style.borderColor = t.color || '#ffd75e';
+      chip.textContent = t.label || 'Token';
+      chip.onmousedown = (e) => {
+        e.preventDefault();
+        // drop at next free square near center
+        const gx = Math.floor(currentMap.cols / 2), gy = Math.floor(currentMap.rows / 2);
+        t.staging = false; t.x = gx; t.y = gy; t.rx = gx; t.ry = gy;
+        buildStaging(); G.pushTokens(); dirty = true;
+      };
+      tray.appendChild(chip);
+    });
+  }
+  function addToken(def) {
+    const t = Object.assign({ id: 't' + Date.now() + Math.floor(Math.random() * 1e4),
+      label: 'Token', x: 0, y: 0, rx: 0, ry: 0, hp: 10, maxHp: 10,
+      hidden: false, staging: false, ownerPeerId: null, color: '#c96', size: 1 }, def);
+    t.rx = t.x; t.ry = t.y;
+    G.tokens.push(t);
+    buildStaging(); G.pushTokens(); dirty = true;
+    return t;
+  }
+  function toggleHide(t) { t.hidden = !t.hidden; G.pushTokens(); dirty = true; }
+
+  // ---------- drawing ----------
+  function drawBase() {
+    const m = currentMap;
+    ctx.save();
+    ctx.scale(cam.scale, cam.scale);
+    ctx.translate(cam.x / cam.scale, cam.y / cam.scale);
+    const W = m.cols * TILE, H = m.rows * TILE;
+    // floor
+    ctx.fillStyle = '#1a1510'; ctx.fillRect(-40, -40, W + 80, H + 80);
+    (m.rooms || []).forEach(r => {
+      ctx.fillStyle = FLOOR_C[r.kind] || '#5c4a2f';
+      ctx.fillRect(r.x * TILE, r.y * TILE, r.w * TILE, r.h * TILE);
+    });
+    if (m.caveBlobs) { // irregular cave walls: ring of dark blobs around edges
+      ctx.fillStyle = '#241f18';
+      for (let gx = 0; gx < m.cols; gx++) for (let gy = 0; gy < m.rows; gy++) {
+        const edge = gx === 0 || gy === 0 || gx === m.cols - 1 || gy === m.rows - 1;
+        const n = Math.abs(Math.sin(gx * 12.9898 + gy * 78.233) * 43758.5453) % 1;
+        if (edge || n < 0.22) { ctx.beginPath(); ctx.arc((gx + .5) * TILE, (gy + .5) * TILE, TILE * .72, 0, 7); ctx.fill(); }
+      }
+    }
+    (m.props || []).forEach(p => {
+      ctx.fillStyle = p.c; ctx.strokeStyle = '#241c10'; ctx.lineWidth = 3;
+      ctx.fillRect(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE);
+      ctx.strokeRect(p.x * TILE, p.y * TILE, p.w * TILE, p.h * TILE);
+    });
+    // walls (solid) and doors (gold gaps)
+    (m.walls || []).forEach(w => {
+      if (w.kind === 'door') {
+        ctx.fillStyle = '#c9a227';
+        ctx.fillRect(w.x * TILE + 6, w.y * TILE + 6, w.w * TILE - 12, w.h * TILE - 12);
+      } else {
+        ctx.fillStyle = '#2b241a';
+        ctx.fillRect(w.x * TILE, w.y * TILE, w.w * TILE, w.h * TILE);
+        ctx.strokeStyle = '#0e0b07'; ctx.lineWidth = 2;
+        ctx.strokeRect(w.x * TILE, w.y * TILE, w.w * TILE, w.h * TILE);
+      }
+    });
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,.14)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let gx = 0; gx <= m.cols; gx++) { ctx.moveTo(gx * TILE, 0); ctx.lineTo(gx * TILE, H); }
+    for (let gy = 0; gy <= m.rows; gy++) { ctx.moveTo(0, gy * TILE); ctx.lineTo(W, gy * TILE); }
+    ctx.stroke();
+    ctx.restore();
+  }
+  function drawFog(playerOpaque) {
+    const m = currentMap;
+    ctx.save();
+    ctx.scale(cam.scale, cam.scale);
+    ctx.translate(cam.x / cam.scale, cam.y / cam.scale);
+    ctx.fillStyle = playerOpaque ? '#000' : 'rgba(0,0,0,' + DM_FOG_ALPHA + ')';
+    const hiddenCells = playerOpaque
+      ? (() => { const s = new Set(); for (let gx = 0; gx < m.cols; gx++) for (let gy = 0; gy < m.rows; gy++) { const k = key(gx, gy); if (!G.fogRevealed.has(k)) s.add(k); } return s; })()
+      : G.fogHidden;
+    hiddenCells.forEach(k => {
+      const [gx, gy] = k.split(',').map(Number);
+      ctx.fillRect(gx * TILE, gy * TILE, TILE, TILE);
+    });
+    ctx.restore();
+  }
+  function drawToken(t, ghostOk) {
+    const s = (t.size || 1) * TILE;
+    const p = pxFromGrid(t.rx ?? t.x, t.ry ?? t.y);
+    const c = screenFromWorld(p.x - s / 2, p.y - s / 2);
+    ctx.save();
+    if (t.hidden && ghostOk) { ctx.globalAlpha = 0.5; }
+    ctx.fillStyle = t.color || '#c96';
+    ctx.beginPath(); ctx.arc(c.x + s * cam.scale / 2, c.y + s * cam.scale / 2, s * cam.scale / 2 - 2, 0, 7); ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = t.hidden && ghostOk ? '#fff' : '#1a1510';
+    if (t.hidden && ghostOk) ctx.setLineDash([6, 4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // label
+    ctx.fillStyle = '#fff'; ctx.font = 'bold ' + Math.max(11, 12 * cam.scale) + 'px system-ui';
+    ctx.textAlign = 'center';
+    ctx.fillText(t.label || '', c.x + s * cam.scale / 2, c.y + s * cam.scale / 2 + 4);
+    // hp bar
+    if (t.maxHp > 0) {
+      const bw = s * cam.scale - 8, frac = Math.max(0, t.hp / t.maxHp);
+      ctx.fillStyle = '#400'; ctx.fillRect(c.x + 4, c.y + s * cam.scale - 9, bw, 6);
+      ctx.fillStyle = frac > .5 ? '#4c4' : frac > .25 ? '#ec4' : '#c44';
+      ctx.fillRect(c.x + 4, c.y + s * cam.scale - 9, bw * frac, 6);
+    }
+    ctx.restore();
+  }
+  function drawDragRuler() {
+    if (!dragRuler) return;
+    const a = screenFromWorld(dragRuler.x0 * TILE, dragRuler.y0 * TILE);
+    const b = screenFromWorld(dragRuler.x1 * TILE, dragRuler.y1 * TILE);
+    const feet = dragRuler.feet;
+    const ok = feet <= dragRuler.speed;
+    ctx.save();
+    ctx.strokeStyle = ok ? '#4f4' : '#f44'; ctx.lineWidth = 3; ctx.setLineDash([8, 5]);
+    ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = ok ? '#4f4' : '#f44'; ctx.font = 'bold 15px system-ui';
+    const label = feet + ' ft';
+    const tw = ctx.measureText(label).width;
+    ctx.fillStyle = 'rgba(0,0,0,.75)';
+    ctx.fillRect((a.x + b.x) / 2 - tw / 2 - 6, (a.y + b.y) / 2 - 24, tw + 12, 22);
+    ctx.fillStyle = ok ? '#4f4' : '#f44';
+    ctx.fillText(label, (a.x + b.x) / 2 - tw / 2, (a.y + b.y) / 2 - 8);
+    ctx.restore();
+  }
+  function drawStandaloneRuler() {
+    if (!rulerPts || rulerPts.length < 1) return;
+    ctx.save();
+    ctx.strokeStyle = '#ffd75e'; ctx.lineWidth = 3;
+    ctx.beginPath();
+    rulerPts.forEach((p, i) => {
+      const s = screenFromWorld(p.x * TILE, p.y * TILE);
+      i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y);
+    });
+    ctx.stroke();
+    rulerPts.forEach(p => {
+      const s = screenFromWorld(p.x * TILE, p.y * TILE);
+      ctx.fillStyle = '#ffd75e'; ctx.beginPath(); ctx.arc(s.x, s.y, 5, 0, 7); ctx.fill();
+    });
+    let total = 0;
+    for (let i = 1; i < rulerPts.length; i++)
+      total += distFt(rulerPts[i - 1].x, rulerPts[i - 1].y, rulerPts[i].x, rulerPts[i].y);
+    if (rulerPts.length > 1) {
+      const last = screenFromWorld(rulerPts[rulerPts.length - 1].x * TILE, rulerPts[rulerPts.length - 1].y * TILE);
+      const label = total + ' ft';
+      ctx.font = 'bold 15px system-ui';
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = 'rgba(0,0,0,.75)'; ctx.fillRect(last.x - tw / 2 - 6, last.y - 30, tw + 12, 22);
+      ctx.fillStyle = '#ffd75e'; ctx.fillText(label, last.x - tw / 2, last.y - 14);
+    }
+    ctx.restore();
+  }
+  function render() {
+    const r = canvas.getBoundingClientRect();
+    if (canvas.width !== r.width || canvas.height !== r.height) {
+      canvas.width = r.width * devicePixelRatio; canvas.height = r.height * devicePixelRatio;
+    }
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    ctx.clearRect(0, 0, r.width, r.height);
+    if (!currentMap) return;
+    drawBase();
+    const asPlayer = previewPlayer || G.role !== 'dm';
+    const visible = G.tokens.filter(t =>
+      !t.staging && (!asPlayer ? true : !t.hidden));
+    visible.forEach(t => drawToken(t, !asPlayer));
+    drawFog(asPlayer);
+    if (!asPlayer) { drawDragRuler(); drawStandaloneRuler(); }
+    dirty = false;
+  }
+  function loop() {
+    if (dirty) render();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- player-view renderer (used by Module 1) ----------
+  function renderPlayerMap(pCanvas, revealed, tokens, mapName) {
+    const pctx = pCanvas.getContext('2d');
+    const m = (mapName && MAPS[mapName]) || currentMap || MAPS.blank;
+    const scale = Math.min(pCanvas.width / (m.cols * TILE), pCanvas.height / (m.rows * TILE));
+    pctx.setTransform(scale, 0, 0, scale, 0, 0);
+    const save = { canvas, ctx, cam: cam, currentMap, previewPlayer };
+    canvas = pCanvas; ctx = pctx; cam = { x: 0, y: 0, scale: 1 }; currentMap = m;
+    const rSet = revealed instanceof Set ? revealed : new Set(revealed || []);
+    const hadG = !!G;
+    if (!G) G = {};
+    const saveFog = G.fogRevealed, saveTok = G.tokens;
+    G.fogRevealed = rSet;
+    G.tokens = (tokens || []).map(t => Object.assign({}, t));
+    drawBase();
+    G.tokens.forEach(t => drawToken(t, false));
+    drawFog(true);
+    G.fogRevealed = saveFog; G.tokens = saveTok;
+    if (!hadG) G = null;
+    canvas = save.canvas; ctx = save.ctx; cam = save.cam; currentMap = save.currentMap;
+  }
+
+  // ---------- input ----------
+  function bindInput() {
+    let painting = false, panning = false, panStart = null;
+    let brushR = () => parseInt(wrap.querySelector('#gn-dmmap-brushsize').value, 10);
+    canvas.addEventListener('contextmenu', e => {
+      e.preventDefault();
+      const g = gridFromPx(e.clientX, e.clientY);
+      const t = tokenAt(g.x, g.y);
+      if (t && tool === 'select') { toggleHide(t); }
+    });
+    canvas.addEventListener('pointerdown', e => {
+      canvas.setPointerCapture(e.pointerId);
+      if (!currentMap) return; // Bug 1: no map yet — ignore canvas interactions
+      const g = gridFromPx(e.clientX, e.clientY);
+      if (e.button === 1 || e.shiftKey) { panning = true; panStart = { x: e.clientX - cam.x, y: e.clientY - cam.y }; return; }
+      if (previewPlayer) return;
+      if (tool === 'fog-hide' || tool === 'fog-reveal') {
+        painting = true;
+        fogSet(g.x + .5, g.y + .5, brushR(), tool === 'fog-hide');
+      } else if (tool === 'ruler') {
+        const p = gridFromPx(e.clientX, e.clientY);
+        rulerPts = rulerPts || [];
+        rulerPts.push({ x: p.x + .5, y: p.y + .5 });
+        dirty = true;
+      } else if (tool === 'select') {
+        const t = tokenAt(g.x, g.y);
+        if (t) {
+          // Bug 2: initialize gx/gy so a click without drag still works (no NaN)
+          dragTok = { t, sx: t.x + (t.size || 1) / 2, sy: t.y + (t.size || 1) / 2, gx: t.x, gy: t.y, alt: false };
+          dragRuler = { x0: dragTok.sx, y0: dragTok.sy, x1: dragTok.sx, y1: dragTok.sy, feet: 0, speed: t.speed || 30 };
+          dirty = true; // show ruler immediately
+        }
+      }
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (panning && panStart) {
+        cam.x = e.clientX - panStart.x; cam.y = e.clientY - panStart.y; dirty = true; return;
+      }
+      const g = gridFromPx(e.clientX, e.clientY);
+      if (painting) { fogSet(g.x + .5, g.y + .5, brushR(), tool === 'fog-hide'); }
+      else if (dragTok) {
+        const alt = e.altKey;
+        const cx = alt ? (gridFromPx(e.clientX, e.clientY).x + .5) : g.x + .5;
+        const cy = alt ? (gridFromPx(e.clientX, e.clientY).y + .5) : g.y + .5;
+        dragRuler.x1 = cx; dragRuler.y1 = cy;
+        dragRuler.feet = distFt(dragRuler.x0, dragRuler.y0, cx, cy);
+        dragTok.alt = alt; dragTok.gx = cx - .5; dragTok.gy = cy - .5;
+        dirty = true;
+      } else if (tool === 'select') {
+        const t = tokenAt(g.x, g.y);
+        if (t !== hoverTok) { hoverTok = t; canvas.style.cursor = t ? 'grab' : 'crosshair'; }
+      }
+    });
+    canvas.addEventListener('pointerup', e => {
+      if (panning) { panning = false; return; }
+      if (painting) { painting = false; return; }
+      if (dragTok) {
+        const { t } = dragTok;
+        // Bug 1: guard against missing map; Bug 2: gx/gy now always initialized
+        if (currentMap) {
+          const gx = dragTok.alt ? dragTok.gx : Math.round(dragTok.gx);
+          const gy = dragTok.alt ? dragTok.gy : Math.round(dragTok.gy);
+          const cx = Math.max(0, Math.min(currentMap.cols - (t.size || 1), gx));
+          const cy = Math.max(0, Math.min(currentMap.rows - (t.size || 1), gy));
+          glideToken(t, cx, cy);
+        }
+        dragTok = null; dragRuler = null; dirty = true;
+      }
+    });
+    canvas.addEventListener('dblclick', e => {
+      if (tool === 'ruler') { /* dblclick ends ruler: keep it drawn until next click */ }
+    });
+    // wheel zoom
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      const f = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+      cam.scale = Math.max(.4, Math.min(3, cam.scale * f));
+      dirty = true;
+    }, { passive: false });
+    // keyboard: Esc clears ruler / cancels preview
+    window.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        if (previewPlayer) togglePreview(false);
+        rulerPts = null; dirty = true;
+      }
+    });
+  }
+  function togglePreview(force) {
+    previewPlayer = force !== undefined ? force : !previewPlayer;
+    wrap.querySelector('[data-tool="player-preview"]').classList.toggle('active', previewPlayer);
+    // Bug 3: hide ALL DM-only UI so the DM sees exactly what players see
+    const dmUI = [
+      document.getElementById('dm-side'),           // guide panel + copilot panel
+      document.getElementById('dmToolbar'),          // quick-slot toolbar
+      wrap.querySelector('#gn-dmmap-staging'),       // staging tray
+      wrap.querySelector('#gn-dmmap-toolbar'),       // map toolbar (fog/ruler tools)
+      wrap.querySelector('#gn-dmmap-rooms'),         // one-click room reveals
+    ];
+    dmUI.forEach(el => { if (el) el.style.display = previewPlayer ? 'none' : ''; });
+    // also hide any open quick-slot floating panels
+    document.querySelectorAll('.dm-panel').forEach(p => { if (previewPlayer) p.hidden = true; });
+    dirty = true;
+  }
+
+  function bindToolbar() {
+    wrap.querySelectorAll('#gn-dmmap-toolbar .gn-dmbtn[data-tool]').forEach(b => {
+      const dt = b.dataset.tool;
+      if (b.disabled) return; // Module 3/4 placeholders
+      b.onclick = () => {
+        if (dt === 'fog-reveal-all') { revealRect({ x: 0, y: 0, w: currentMap.cols, h: currentMap.rows }); return; }
+        if (dt === 'player-preview') { togglePreview(); return; }
+        tool = dt; rulerPts = null;
+        wrap.querySelectorAll('#gn-dmmap-toolbar .gn-dmbtn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        dirty = true;
+      };
+    });
+    wrap.querySelector('#gn-dmmap-brushsize').addEventListener('input', () => {});
+    // Bug 5: DM-only settings gear (Groq API key) — wired here since it's in the map toolbar
+    const dmSetBtn = wrap.querySelector('#btn-settings-dm');
+    if (dmSetBtn) dmSetBtn.onclick = () => { if (window.GN && typeof window.GN.openSettings === 'function') window.GN.openSettings(); };
+  }
+
+  // map picker (DM picks at session start)
+  function showMapPicker() {
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:20';
+    const box = document.createElement('div');
+    box.style.cssText = 'background:#241d12;border:1px solid #6b5426;border-radius:12px;padding:24px;text-align:center';
+    box.innerHTML = '<div style="color:#ffd75e;font:600 18px system-ui;margin-bottom:16px">Choose your battle map</div>';
+    Object.keys(MAPS).forEach(k => {
+      const b = document.createElement('button');
+      b.className = 'gn-dmbtn'; b.style.margin = '4px'; b.style.fontSize = '15px'; b.style.padding = '10px 16px';
+      b.textContent = MAPS[k].name;
+      b.onclick = () => { ov.remove(); pickMap(k); };
+      box.appendChild(b);
+    });
+    ov.appendChild(box);
+    wrap.appendChild(ov);
+  }
+
+  // ---------- public init ----------
+  function initDMMap(opts) {
+    G = window.G || {};
+    window.G = G;
+    makePushers();
+    // coordinator places the ## HTML block into G.mapEl; we grab refs:
+    wrap = G.mapEl.querySelector('#gn-dmmap-wrap');
+    canvas = G.mapEl.querySelector('#gn-dmmap-canvas');
+    ctx = canvas.getContext('2d');
+    bindInput(); bindToolbar(); buildStaging();
+    // apply opts: preset map + starting tokens
+    if (opts && opts.tokens) opts.tokens.forEach(addToken);
+    if (opts && opts.map) pickMap(opts.map); else showMapPicker();
+    // fit camera to map once chosen (defer until map picked)
+    const fitTimer = setInterval(() => {
+      if (!currentMap) return;
+      clearInterval(fitTimer);
+      const r = canvas.getBoundingClientRect();
+      cam.scale = Math.min(r.width / (currentMap.cols * TILE), r.height / (currentMap.rows * TILE)) * 0.94;
+      cam.x = (r.width - currentMap.cols * TILE * cam.scale) / 2;
+      cam.y = (r.height - currentMap.rows * TILE * cam.scale) / 2 - 20;
+      dirty = true;
+    }, 300);
+    loop();
+    G.mapCam = function () { return { scale: cam.scale, x: cam.x, y: cam.y }; };
+    G.mapDimsNow = function () { return currentMap ? { cols: currentMap.cols, rows: currentMap.rows } : null; };
+    return { pickMap, addToken, toggleHide, renderPlayerMap, revealRect, togglePreview, moveToken: glideToken };
+  }
+
+  window.initDMMap = initDMMap;
+  window.renderPlayerMap = renderPlayerMap;
+})();
+
+/* Module 3 — DM Quick-Slot Tools. Needs: Module 1 (global G, netBroadcast), Module 2 (map canvas, G.tokens).
+   All cross-module calls guarded. Exposes: initDMTools(), DMTools. */
+(function () {
+'use strict';
+/* ---------------- tiny helpers ---------------- */
+function gs() { return window.G || {}; }                       // Module 1 state (guarded)
+function bcast(ev) { if (typeof window.netBroadcast === 'function') { try { window.netBroadcast(ev); } catch (e) {} } }
+function $(id) { return document.getElementById(id); }
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+function toast(msg) {
+  var t = document.querySelector('.dm-panel:not([hidden]) .dm-status') || $('aoeStatus');
+  if (t) t.textContent = msg;
+}
+function store(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+function load(k, fb) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch (e) { return fb; } }
+function uid(p) { return (p || 'id') + Date.now().toString(36) + Math.floor(Math.random() * 1e4); }
+function el(tag, cls, text) {
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+function btn(label, cls, fn) {
+  var b = el('button', cls, label);
+  b.addEventListener('click', fn);
+  return b;
+}
+function numInput(val, title, fn) {
+  var i = el('input'); i.type = 'number'; i.value = val; i.title = title;
+  i.addEventListener('change', function () { fn(parseInt(i.value, 10) || 0); });
+  return i;
+}
+/* ---------------- map / grid adapters (Module 2) ---------------- */
+function cellPx() { return 64; }                               // Module 2 TILE; overlay draws in world px w/ camera transform
+function camT() { var g = gs(); try { if (g.mapCam) return g.mapCam(); } catch (e) {} return { scale: 1, x: 0, y: 0 }; }
+function mapCanvasEl() {
+  var g = gs();
+  return g.mapCanvas || g.mapEl || $('mapCanvas') || $('map') || null;
+}
+function mapDims() {
+  var g = gs();
+  if (typeof g.mapDimsNow === 'function') { try { var d = g.mapDimsNow(); if (d) return d; } catch (e) {} }
+  var m = g.map || {};
+  return { cols: m.cols || 20, rows: m.rows || 14 };
+}
+function tokFeet(t) {                                          // token center in feet
+  var g = gs();
+  if (!t) return null;
+  if (typeof g.tokenFeet === 'function') { try { return g.tokenFeet(t); } catch (e) {} }
+  if (typeof t.fx === 'number' && typeof t.fy === 'number') return { x: t.fx, y: t.fy };
+  return { x: (t.x || 0) * 5, y: (t.y || 0) * 5 };              // x,y in grid squares
+}
+function tokById(id) {
+  var ts = gs().tokens || [];
+  for (var i = 0; i < ts.length; i++) if (ts[i].id === id) return ts[i];
+  return null;
+}
+function addTokenToMap(tok) {
+  var g = gs();
+  if (typeof g.stagingAdd === 'function') { try { g.stagingAdd(tok); return true; } catch (e) {} }
+  if (typeof g.mapAddToken === 'function') { try { g.mapAddToken(tok); return true; } catch (e) {} }
+  if (Array.isArray(g.tokens)) { g.tokens.push(tok); return true; }
+  toast('Map module is not ready — token staged locally.');
+  return false;
+}
+/* ---------------- overlay canvas (drawn over Module 2's map) ---------------- */
+var aoeCv = null, actx = null;
+function ensureOverlay() {
+  var mc = mapCanvasEl();
+  if (!mc || !mc.parentElement) return false;
+  if (!aoeCv) {
+    aoeCv = document.createElement('canvas'); aoeCv.id = 'aoeOverlay';
+    var pe = mc.parentElement;
+    if (getComputedStyle(pe).position === 'static') pe.style.position = 'relative';
+    pe.appendChild(aoeCv);
+  }
+  var w = mc.offsetWidth || mc.width, h = mc.offsetHeight || mc.height;
+  if (aoeCv.width !== w || aoeCv.height !== h) { aoeCv.width = w; aoeCv.height = h; }
+  aoeCv.style.cssText = 'position:absolute;pointer-events:none;z-index:5;left:' + (mc.offsetLeft || 0) +
+    'px;top:' + (mc.offsetTop || 0) + 'px;width:' + w + 'px;height:' + h + 'px';
+  actx = aoeCv.getContext('2d');
+  return true;
+}
+/* TOOL 1 — AoE spell templates (Foundry-style, 5e-correct) */
+var aoe = { shape: 'circle', size: 20, ox: null, oy: null, angle: 0, confirmed: false, placing: false, squares: [] };
+// ox/oy = origin in FEET on a grid intersection. angle in radians (0 = east).
+function aoeLocal(px, py) {                                    // feet -> shape-local coords
+  var dx = px - aoe.ox, dy = py - aoe.oy, c = Math.cos(aoe.angle), s = Math.sin(aoe.angle);
+  return { u: dx * c + dy * s, v: -dx * s + dy * c };
+}
+function aoeContains(px, py) {
+  var L = aoeLocal(px, py), u = L.u, v = L.v, S = aoe.size;
+  if (aoe.shape === 'circle') {
+    var dx = px - aoe.ox, dy = py - aoe.oy;
+    return dx * dx + dy * dy <= S * S;
+  }
+  if (aoe.shape === 'cone')                                    // 5e triangle: far-end width = distance
+    return u >= 0 && u <= S && Math.abs(v) <= u / 2;
+  if (aoe.shape === 'line')                                    // 5 ft wide ray
+    return u >= 0 && u <= S && Math.abs(v) <= 2.5;
+  if (aoe.shape === 'cube')                                    // square S×S from origin along aim
+    return u >= 0 && u <= S && Math.abs(v) <= S / 2;
+  return false;
+}
+function aoeRecompute() {                                      // Xanathar ≥50% rule ≈ square-center-in-shape
+  aoe.squares = [];
+  if (aoe.ox == null) return;
+  var d = mapDims(), S = aoe.size, r = aoe.shape === 'circle' ? S : Math.ceil(S * 1.5);
+  var c0 = Math.max(0, Math.floor(aoe.ox / 5) - Math.ceil(r / 5) - 1);
+  var c1 = Math.min(d.cols - 1, Math.ceil(aoe.ox / 5) + Math.ceil(r / 5) + 1);
+  var r0 = Math.max(0, Math.floor(aoe.oy / 5) - Math.ceil(r / 5) - 1);
+  var r1 = Math.min(d.rows - 1, Math.ceil(aoe.oy / 5) + Math.ceil(r / 5) + 1);
+  for (var c = c0; c <= c1; c++) for (var r2 = r0; r2 <= r1; r2++) {
+    if (aoeContains((c + 0.5) * 5, (r2 + 0.5) * 5)) aoe.squares.push({ c: c, r: r2 });
+  }
+}
+function aoeAffectedTokens() {
+  var out = [], ts = gs().tokens || [];
+  if (aoe.ox == null) return out;
+  for (var i = 0; i < ts.length; i++) {
+    var p = tokFeet(ts[i]);
+    if (p && aoeContains(p.x, p.y)) out.push(ts[i]);
+  }
+  return out;
+}
+function aoeHandlePx() {                                       // rotate-handle position (px on overlay)
+  var cell = cellPx(), L = aoe.size;
+  return {
+    x: (aoe.ox + Math.cos(aoe.angle) * L) / 5 * cell,
+    y: (aoe.oy + Math.sin(aoe.angle) * L) / 5 * cell
+  };
+}
+function drawAoE(now) {
+  if (!actx || aoe.ox == null) return;
+  var cell = cellPx(), aff = aoeAffectedTokens();
+  actx.fillStyle = 'rgba(255,90,60,0.28)';                       // covered squares: filled, not just outline
+  actx.strokeStyle = 'rgba(255,90,60,0.65)'; actx.lineWidth = 1.5;
+  for (var s = 0; s < aoe.squares.length; s++) {
+    var sq = aoe.squares[s];
+    actx.fillRect(sq.c * cell, sq.r * cell, cell, cell);
+    actx.strokeRect(sq.c * cell + 0.5, sq.r * cell + 0.5, cell - 1, cell - 1);
+  }
+  var ox = aoe.ox / 5 * cell, oy = aoe.oy / 5 * cell, h = aoeHandlePx();
+  actx.fillStyle = '#ffd76a';
+  actx.beginPath(); actx.arc(ox, oy, 5, 0, 7); actx.fill();      // origin marker
+  actx.strokeStyle = '#ffd76a'; actx.lineWidth = 2;              // aim line + rotate handle
+  actx.beginPath(); actx.moveTo(ox, oy); actx.lineTo(h.x, h.y); actx.stroke();
+  actx.fillStyle = '#14161d';
+  actx.beginPath(); actx.arc(h.x, h.y, 9, 0, 7); actx.fill(); actx.stroke();
+  actx.fillStyle = '#ffd76a';
+  actx.beginPath(); actx.arc(h.x, h.y, 4, 0, 7); actx.fill();
+  var pulse = 3 * Math.sin(now / 220);                           // pulsing rings on affected tokens
+  actx.strokeStyle = '#ff5040'; actx.lineWidth = 3;
+  for (var a = 0; a < aff.length; a++) {
+    var p = tokFeet(aff[a]);
+    if (p) { actx.beginPath(); actx.arc(p.x / 5 * cell, p.y / 5 * cell, cell * 0.55 + pulse, 0, 7); actx.stroke(); }
+  }
+  if (!aoe.confirmed) {
+    actx.fillStyle = 'rgba(0,0,0,0.55)'; actx.font = '12px system-ui';
+    actx.fillText('Drag the gold handle to aim, then Confirm', ox + 10, oy - 10);
+  }
+}
+var activeTurnId = null;
+function drawTurnRing(now) {
+  if (!actx || !activeTurnId) return;
+  var t = tokById(activeTurnId), p = t && tokFeet(t);
+  if (!p) return;
+  var cell = cellPx(), pulse = 2 * Math.sin(now / 300);
+  actx.strokeStyle = '#ffd76a'; actx.lineWidth = 4;
+  actx.beginPath();
+  actx.arc(p.x / 5 * cell, p.y / 5 * cell, cell * 0.62 + pulse, 0, 7);
+  actx.stroke();
+}
+var rafOn = false;
+function drawLoop(now) {
+  if (ensureOverlay()) {
+    var c = camT();
+    actx.setTransform(1, 0, 0, 1, 0, 0);
+    actx.clearRect(0, 0, aoeCv.width, aoeCv.height);
+    actx.scale(c.scale, c.scale);
+    actx.translate(c.x / c.scale, c.y / c.scale);
+    drawAoE(now);
+    drawTurnRing(now);
+  }
+  if (rafOn) requestAnimationFrame(drawLoop);
+}
+function startLoop() { if (!rafOn) { rafOn = true; requestAnimationFrame(drawLoop); } }
+function aoeFromEvent(e) {                                     // screen px -> {i,j} grid intersection (world coords)
+  var mc = mapCanvasEl(), r = mc.getBoundingClientRect(), c = camT();
+  var wx = (e.clientX - r.left - c.x) / c.scale, wy = (e.clientY - r.top - c.y) / c.scale;
+  return { i: Math.round(wx / 64), j: Math.round(wy / 64) };
+}
+var rotating = false;
+function aoePointerDown(e) {
+  if (!aoe.placing && !rotating) return;
+  var mc = mapCanvasEl(); if (!mc) return;
+  var cell = cellPx(), r = mc.getBoundingClientRect();
+  var mx = e.clientX - r.left, my = e.clientY - r.top;
+  if (aoe.ox != null && !aoe.confirmed) {                      // maybe grabbing the rotate handle
+    var h = aoeHandlePx(), cc = camT();
+    var hx = h.x * cc.scale + cc.x, hy = h.y * cc.scale + cc.y;
+    if (Math.hypot(mx - hx, my - hy) < 20) {
+      rotating = true; e.stopPropagation(); e.preventDefault(); return;
+    }
+  }
+  if (aoe.placing && aoe.ox == null) {                         // set origin at grid intersection
+    var g = aoeFromEvent(e);
+    aoe.ox = g.i * 5; aoe.oy = g.j * 5; aoe.angle = 0; aoe.confirmed = false;
+    aoeRecompute();
+    $('aoeStatus').textContent = 'Origin set — drag the gold handle to aim, then Confirm.';
+    $('aoeConfirmRow').hidden = false;
+    e.stopPropagation(); e.preventDefault();
+  }
+}
+function aoePointerMove(e) {
+  if (!rotating || aoe.ox == null) return;
+  var mc = mapCanvasEl(), r = mc.getBoundingClientRect(), c = camT();
+  var mx = ((e.clientX - r.left - c.x) / c.scale) / 64 * 5, my = ((e.clientY - r.top - c.y) / c.scale) / 64 * 5;
+  aoe.angle = Math.atan2(my - aoe.oy, mx - aoe.ox);
+  aoeRecompute();
+}
+function aoePointerUp() { rotating = false; }
+function aoeClear(silent) {
+  aoe.ox = null; aoe.oy = null; aoe.confirmed = false; aoe.placing = false; aoe.squares = [];
+  var cr = $('aoeConfirmRow'); if (cr) cr.hidden = true;
+  var b = $('aoePlace'); if (b) { b.classList.remove('on'); b.textContent = '📐 Place on map'; }
+  if (!silent) bcast({ t: 'aoe', clear: true });
+}
+function wireAoE() {
+  [['#aoeShapes', 'shape', function (v) { aoe.shape = v; }],
+   ['#aoeSizes', 'size', function (v) { aoe.size = parseInt(v, 10); }]].forEach(function (cfg) {
+    var btns = document.querySelectorAll(cfg[0] + ' .dm-btn');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        btns.forEach(function (x) { x.classList.remove('sel'); });
+        b.classList.add('sel'); cfg[2](b.dataset[cfg[1]]); aoeRecompute();
+      });
+    });
+  });
+  $('aoePlace').addEventListener('click', function () {
+    aoeClear(true);
+    aoe.placing = true;
+    this.classList.add('on'); this.textContent = '📐 Click map for origin…';
+    $('aoeStatus').textContent = 'Click the map — origin snaps to the nearest grid intersection.';
+  });
+  $('aoeConfirm').addEventListener('click', function () {
+    aoe.confirmed = true; aoe.placing = false;
+    $('aoeConfirmRow').hidden = true;
+    var b = $('aoePlace'); b.classList.remove('on'); b.textContent = '📐 Place on map';
+    var n = aoeAffectedTokens().length;
+    $('aoeStatus').textContent = 'Template locked — ' + n + ' token' + (n === 1 ? '' : 's') + ' in the area.';
+    bcast({ t: 'aoe', shape: aoe.shape, origin: { x: aoe.ox, y: aoe.oy }, size: aoe.size, angle: aoe.angle });
+  });
+  $('aoeCancel').addEventListener('click', function () { aoeClear(false); $('aoeStatus').textContent = 'Template discarded.'; });
+  $('aoeClear').addEventListener('click', function () { aoeClear(false); $('aoeStatus').textContent = 'Template cleared.'; });
+  var mc = mapCanvasEl();
+  if (mc) {
+    mc.addEventListener('pointerdown', aoePointerDown, true);
+    window.addEventListener('pointermove', aoePointerMove);
+    window.addEventListener('pointerup', aoePointerUp);
+  }
+}
+/* TOOL 2 — Monster quick creator + Bestiary */
+var bestiary = load('gn_bestiary', []);
+function monsterBlockFromForm() {
+  function val(id) { return $(id).value.trim(); }
+  function num(id) { return parseInt($(id).value, 10) || 0; }
+  var atks = [];
+  if (val('mA1n')) atks.push({ name: val('mA1n'), hit: num('mA1h'), dmg: val('mA1d') });
+  if (val('mA2n')) atks.push({ name: val('mA2n'), hit: num('mA2h'), dmg: val('mA2d') });
+  var m = {
+    id: uid('m'), kind: 'monster',
+    name: val('mName') || 'Unnamed Monster',
+    hp: num('mHp') || 10, ac: num('mAc') || 10,
+    speed: val('mSpeed') || '30 ft',
+    attacks: atks, trait: val('mTrait')
+  };
+  m.text = monsterText(m);
+  return m;
+}
+function monsterText(m) {
+  var lines = [m.name.toUpperCase(), 'HP ' + m.hp + '   AC ' + m.ac + '   Speed ' + m.speed];
+  m.attacks.forEach(function (a) {
+    lines.push(a.name + ' +' + a.hit + ' (' + a.dmg + ')');
+  });
+  if (m.trait) lines.push('Trait: ' + m.trait);
+  return lines.join('\n');
+}
+function renderBestiary() {
+  var ul = $('bestiaryList'); ul.innerHTML = '';
+  bestiary.forEach(function (m) {
+    var li = el('li', 'dm-card');
+    li.innerHTML = '<div class="t">' + esc(m.name) + '</div><div class="sub">HP ' + m.hp + ' · AC ' + m.ac +
+      ' · ' + m.attacks.map(function (a) { return esc(a.name) + ' +' + a.hit; }).join(', ') + '</div>';
+    var row = el('div', 'dm-row');
+    row.appendChild(btn('Drop on map', 'dm-btn primary', function () { dropMonster(m); }));
+    row.appendChild(btn('✕', 'dm-btn danger', function () {
+      bestiary = bestiary.filter(function (x) { return x.id !== m.id; });
+      store('gn_bestiary', bestiary); renderBestiary();
+    }));
+    li.appendChild(row); ul.appendChild(li);
+  });
+  if (!bestiary.length) ul.innerHTML = '<div class="dm-status">Empty — create a monster to start the bestiary.</div>';
+}
+function dropMonster(m) {
+  var d = mapDims();
+  var tok = {
+    id: uid('tok'), name: m.name, x: d.cols / 2, y: d.rows / 2,
+    hp: m.hp, maxHp: m.hp, ac: m.ac, color: '#c0392b', kind: 'monster'
+  };
+  if (addTokenToMap(tok)) { bcast({ t: 'tokenAdd', token: tok }); toast(m.name + ' dropped at map center.'); }
+}
+function wireMonster() {
+  renderBestiary();
+  $('mAddMap').addEventListener('click', function () {
+    var m = monsterBlockFromForm();
+    bestiary.unshift(m); store('gn_bestiary', bestiary); renderBestiary();
+    dropMonster(m);
+  });
+  $('mSave').addEventListener('click', function () {
+    var m = monsterBlockFromForm();
+    bestiary.unshift(m); store('gn_bestiary', bestiary); renderBestiary();
+    toast(m.name + ' saved to the bestiary.');
+  });
+  $('mSendGuide').addEventListener('click', function () {
+    var m = monsterBlockFromForm(), g = gs();
+    if (g && typeof g.guideAddMonster === 'function') {
+      try { g.guideAddMonster(m); toast(m.name + ' sent to the DM guide.'); }
+      catch (e) { toast('Guide hook failed.'); }
+    } else toast('DM guide not loaded — hook G.guideAddMonster is missing.');
+  });
+}
+/* TOOL 3 — NPC creator + roster */
+var npcs = load('gn_npcs', []);
+var selNpcId = null;
+function renderNpcs() {
+  var ul = $('npcList'); ul.innerHTML = '';
+  npcs.forEach(function (n) {
+    var li = el('li', 'dm-card');
+    li.innerHTML = '<div class="t">' + esc(n.name) + '</div><div class="sub">' + esc(n.role) + '</div>';
+    li.style.cursor = 'pointer';
+    li.addEventListener('click', function () { selNpcId = n.id; renderNpcCard(); });
+    ul.appendChild(li);
+  });
+  if (!npcs.length) ul.innerHTML = '<div class="dm-status">No NPCs yet.</div>';
+  renderNpcCard();
+}
+function renderNpcCard() {
+  var box = $('npcCard'); box.innerHTML = '';
+  var n = null;
+  for (var i = 0; i < npcs.length; i++) if (npcs[i].id === selNpcId) n = npcs[i];
+  if (!n) { box.innerHTML = '<div class="dm-status">Click an NPC to view their card.</div>'; return; }
+  var card = el('div', 'dm-card');
+  card.innerHTML =
+    '<div class="t">' + esc(n.name) + '</div>' +
+    '<div class="sub"><b>Role:</b> ' + esc(n.role) + '</div>' +
+    '<div class="sub"><b>Personality:</b> ' + esc(n.personality) + '</div>' +
+    '<div class="sub"><b>Voice:</b> ' + esc(n.voice) + '</div>' +
+    '<div class="secret">🔒 DM-only secret: ' + esc(n.secret) + '</div><div id="npcLineOut"></div>';
+  var row = el('div', 'dm-row');
+  row.appendChild(btn('💬 Suggest dialogue', 'dm-btn primary', function () { suggestDialogue(n); }));
+  row.appendChild(btn('✕', 'dm-btn danger', function () {
+    npcs = npcs.filter(function (x) { return x.id !== n.id; });
+    store('gn_npcs', npcs); selNpcId = null; renderNpcs();
+  }));
+  card.appendChild(row); box.appendChild(card);
+}
+function suggestDialogue(npc) {
+  var out = $('npcLineOut'), g = gs();
+  var show = function (t) { out.innerHTML = '<div class="dm-npcline">“' + esc(t) + '”</div>'; };
+  if (!g || typeof g.copilotNPCLine !== 'function') {          // guarded: AI module owns this
+    show('AI copilot not loaded yet — hook G.copilotNPCLine is missing.');
+    return;
+  }
+  out.innerHTML = '<div class="dm-status">…thinking…</div>';
+  try {
+    var r = g.copilotNPCLine(npc);
+    if (r && typeof r.then === 'function') r.then(show, function () { show('(copilot error)'); });
+    else show(String(r));
+  } catch (e) { show('(copilot error)'); }
+}
+function wireNpc() {
+  renderNpcs();
+  $('nAdd').addEventListener('click', function () {
+    var n = {
+      id: uid('npc'),
+      name: $('nName').value.trim() || 'Unnamed NPC',
+      role: $('nRole').value.trim(),
+      personality: $('nPersonality').value.trim(),
+      voice: $('nVoice').value.trim(),
+      secret: $('nSecret').value.trim()
+    };
+    npcs.unshift(n); store('gn_npcs', npcs);
+    var g = gs();
+    if (g && typeof g.guideAddNPC === 'function') { try { g.guideAddNPC(n); } catch (e) {} }
+    selNpcId = n.id; renderNpcs();
+    $('nName').value = $('nRole').value = $('nPersonality').value = $('nVoice').value = $('nSecret').value = '';
+    toast(n.name + ' added to the roster.');
+  });
+}
+/* TOOL 4 — Initiative tracker */
+var combat = [];                                                       // {cid, tokenId, name, hp, maxHp, dex, init}
+var turnIdx = -1;
+function renderInit() {
+  var ul = $('initList'); ul.innerHTML = '';
+  refreshTokenPick();
+  combat.forEach(function (c, i) {
+    var li = el('li', 'dm-init-row' + (i === turnIdx ? ' turn' : ''));
+    li.appendChild(el('span', 'nm', c.name));
+    li.appendChild(numInput(c.init, 'Initiative', function (v) { c.init = v; }));
+    li.appendChild(numInput(c.dex, 'DEX mod', function (v) { c.dex = v; }));
+    var hp = el('span', null, c.hp + '/' + c.maxHp);
+    hp.style.cssText = 'color:#9aa0b5;font-size:12px;white-space:nowrap';
+    li.appendChild(btn('−', 'dm-hpbtn', function () { c.hp = Math.max(0, c.hp - 1); syncHp(c); renderInit(); }));
+    li.appendChild(hp);
+    li.appendChild(btn('+', 'dm-hpbtn', function () { c.hp = Math.min(c.maxHp, c.hp + 1); syncHp(c); renderInit(); }));
+    li.appendChild(btn('✕', 'dm-hpbtn', function () {
+      combat.splice(i, 1);
+      if (turnIdx >= combat.length) turnIdx = combat.length - 1;
+      if (!combat.length) activeTurnId = null;
+      renderInit();
+    }));
+    ul.appendChild(li);
+  });
+  $('initStatus').textContent = combat.length
+    ? combat.length + ' combatants.' + (turnIdx >= 0 && combat[turnIdx] ? ' Turn: ' + combat[turnIdx].name : '')
+    : 'No combatants yet — add tokens above.';
+}
+function syncHp(c) { var t = tokById(c.tokenId); if (t) t.hp = c.hp; }
+function refreshTokenPick() {
+  var sel = $('iTokenPick'); sel.innerHTML = '';
+  var inList = {};
+  combat.forEach(function (c) { inList[c.tokenId] = true; });
+  (gs().tokens || []).forEach(function (t) {
+    if (inList[t.id] || t.staging) return; // Bug 4: skip staging tokens
+    var o = document.createElement('option'); o.value = t.id; o.textContent = t.label || t.id; // Bug 4: tokens use label
+    sel.appendChild(o);
+  });
+  if (!sel.options.length) {
+    var o = document.createElement('option'); o.value = ''; o.textContent = '— no tokens on map —';
+    sel.appendChild(o);
+  }
+}
+function announceTurn() {
+  activeTurnId = (turnIdx >= 0 && combat[turnIdx]) ? combat[turnIdx].tokenId : null;
+  if (activeTurnId) bcast({ t: 'turn', tokenId: activeTurnId });
+}
+function wireInit() {
+  renderInit();
+  $('iRoll').addEventListener('click', function () {
+    combat.forEach(function (c) { c.init = 1 + Math.floor(Math.random() * 20) + (c.dex || 0); });
+    combat.sort(function (a, b) { return b.init - a.init; });
+    turnIdx = combat.length ? 0 : -1;
+    renderInit(); announceTurn();
+    toast(combat.length ? 'Rolled — ' + combat[0].name + ' goes first.' : 'No combatants to roll for.');
+  });
+  $('iSort').addEventListener('click', function () {
+    combat.sort(function (a, b) { return b.init - a.init; });
+    turnIdx = combat.length ? 0 : -1; renderInit(); announceTurn();
+  });
+  $('iNext').addEventListener('click', function () {
+    if (!combat.length) return;
+    turnIdx = (turnIdx + 1) % combat.length;
+    renderInit(); announceTurn();
+  });
+  $('iClear').addEventListener('click', function () { combat = []; turnIdx = -1; activeTurnId = null; renderInit(); });
+  $('iAdd').addEventListener('click', function () {
+    var t = tokById($('iTokenPick').value);
+    if (!t) { toast('No token selected.'); return; }
+    combat.push({
+      cid: uid('c'), tokenId: t.id, name: t.label || t.id,
+      hp: t.hp != null ? t.hp : 10, maxHp: t.maxHp != null ? t.maxHp : 10,
+      dex: t.dex || 0, init: 0
+    });
+    renderInit();
+  });
+}
+/* TOOL 5 — Sound effects (Web Audio, synthesized, no files). DM + players call playSfx(name, on). */
+var AC = null, loops = {};
+function ac() {
+  if (!AC) { var Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return null; AC = new Ctx(); }
+  if (AC.state === 'suspended') AC.resume().catch(function () {});
+  return AC;
+}
+document.addEventListener('pointerdown', function () { if (AC && AC.state === 'suspended') AC.resume().catch(function () {}); });
+function noiseBuf(sec, brown) {
+  var c = ac(), b = c.createBuffer(1, c.sampleRate * sec, c.sampleRate), d = b.getChannelData(0), last = 0, i, w;
+  for (i = 0; i < d.length; i++) { w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
+  return b;
+}
+function envGain(t, peak, dur) {
+  var g = ac().createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(peak, 0.0001), t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  return g;
+}
+function tone(type, f0, f1, t, dur, peak, dest) {
+  var c = ac(), o = c.createOscillator(), g = envGain(t, peak, dur);
+  o.type = type; o.frequency.setValueAtTime(f0, t);
+  if (f1 && f1 !== f0) o.frequency.exponentialRampToValueAtTime(Math.max(f1, 1), t + dur);
+  o.connect(g); g.connect(dest || c.destination);
+  o.start(t); o.stop(t + dur + 0.05);
+}
+function startTavern() {
+  var c = ac();
+  var src = c.createBufferSource(); src.buffer = noiseBuf(2.5, true); src.loop = true;
+  var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 420;
+  var g = c.createGain(); g.gain.value = 0.22;
+  src.connect(lp); lp.connect(g); g.connect(c.destination); src.start();
+  var timer = setInterval(function () {                               // random glass clinks
+    if (!loops.tavern || Math.random() < 0.45) return;
+    tone('triangle', 2200 + Math.random() * 2200, 1800, ac().currentTime, 0.12, 0.06);
+  }, 700);
+  loops.tavern = { stop: function () { try { src.stop(); } catch (e) {} clearInterval(timer); } };
+}
+function startDrums() {
+  var step = 0;
+  var timer = setInterval(function () {
+    if (!loops.drums) return;
+    var c = ac(), t = c.currentTime;
+    var vol = step % 4 === 0 ? 0.55 : step % 4 === 2 ? 0.4 : 0.18;
+    tone('sine', 70, 38, t, 0.32, vol);                               // low thump + click
+    var src = c.createBufferSource(); src.buffer = noiseBuf(0.08, false);
+    var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 300;
+    var g = envGain(t, vol * 0.5, 0.1);
+    src.connect(lp); lp.connect(g); g.connect(c.destination); src.start(t);
+    step++;
+  }, 460);
+  loops.drums = { stop: function () { clearInterval(timer); } };
+}
+function stopLoop(name) {
+  if (loops[name]) { try { loops[name].stop(); } catch (e) {} delete loops[name]; }
+  var btn = document.querySelector('.dm-sfx-grid [data-sfx="' + name + '"]');
+  if (btn) btn.classList.remove('on');
+}
+var oneShots = {
+  creak: function () {                                                // door creak: slow saw wobble
+    var c = ac(), t = c.currentTime, o = c.createOscillator(), g = envGain(t, 0.16, 1.3);
+    var bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; bp.Q.value = 4;
+    var lfo = c.createOscillator(), lg = c.createGain();
+    lfo.frequency.value = 7; lg.gain.value = 25; lfo.connect(lg); lg.connect(o.frequency);
+    o.type = 'sawtooth'; o.frequency.setValueAtTime(95, t); o.frequency.linearRampToValueAtTime(150, t + 1.2);
+    o.connect(bp); bp.connect(g); g.connect(c.destination);
+    o.start(t); lfo.start(t); o.stop(t + 1.4); lfo.stop(t + 1.4);
+  },
+  clash: function () {                                                // sword clash: inharmonic metallic burst
+    var c = ac(), t = c.currentTime;
+    [618, 927, 1244, 1868].forEach(function (f, i) { tone('square', f * (0.98 + Math.random() * 0.04), f * 0.9, t, 0.35 - i * 0.05, 0.10); });
+    var src = c.createBufferSource(); src.buffer = noiseBuf(0.15, false);
+    var hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 3000;
+    var g = envGain(t, 0.25, 0.15);
+    src.connect(hp); hp.connect(g); g.connect(c.destination); src.start(t);
+  },
+  zap: function () {                                                  // magic zap: descending square + shimmer
+    var t = ac().currentTime;
+    tone('square', 1400, 180, t, 0.4, 0.14);
+    tone('sine', 2800, 3600, t, 0.25, 0.06);
+    tone('sine', 700, 90, t + 0.05, 0.35, 0.08);
+  },
+  roar: function () {                                                 // dragon roar: FM growl
+    var c = ac(), t = c.currentTime;
+    var car = c.createOscillator(), mod = c.createOscillator(), mg = c.createGain();
+    car.type = 'sawtooth';
+    car.frequency.setValueAtTime(68, t); car.frequency.linearRampToValueAtTime(44, t + 1.4);
+    mod.frequency.setValueAtTime(28, t); mod.frequency.linearRampToValueAtTime(58, t + 1.4);
+    mg.gain.setValueAtTime(35, t); mg.gain.linearRampToValueAtTime(95, t + 1.4);
+    mod.connect(mg); mg.connect(car.frequency);
+    var lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 380;
+    var g = envGain(t, 0.5, 1.6);
+    var nz = c.createBufferSource(); nz.buffer = noiseBuf(1.6, true);
+    var ng = envGain(t, 0.2, 1.6);
+    car.connect(lp); lp.connect(g); g.connect(c.destination);
+    nz.connect(ng); ng.connect(c.destination);
+    car.start(t); mod.start(t); nz.start(t);
+    car.stop(t + 1.7); mod.stop(t + 1.7); nz.stop(t + 1.7);
+  },
+  fanfare: function () {                                               // victory: bright arpeggio
+    var t = ac().currentTime;
+    [523.25, 659.25, 783.99, 1046.5, 783.99, 1046.5].forEach(function (f, i) {
+      tone('triangle', f, f, t + i * 0.16, 0.28, 0.22); tone('sine', f * 2, f * 2, t + i * 0.16, 0.2, 0.06);
+    });
+  }
+};
+function playSfx(name, on) {
+  if (!ac()) return;
+  try {
+    if (name === 'tavern' || name === 'drums') {
+      var want = (typeof on === 'boolean') ? on : !loops[name];
+      if (want && !loops[name]) {
+        (name === 'tavern' ? startTavern : startDrums)();
+        var b = document.querySelector('.dm-sfx-grid [data-sfx="' + name + '"]');
+        if (b) b.classList.add('on');
+      } else if (!want && loops[name]) stopLoop(name);
+      return;
+    }
+    if (oneShots[name]) oneShots[name]();
+  } catch (e) {}
+}
+function wireSfx() {
+  document.querySelectorAll('[data-sfx]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var name = b.dataset.sfx, isLoop = name === 'tavern' || name === 'drums', want = isLoop && !loops[name];
+      playSfx(name, isLoop ? want : undefined);
+      bcast(isLoop ? { t: 'sfx', name: name, on: want } : { t: 'sfx', name: name });
+    });
+  });
+}
+/* TOOL 6 — Handouts */
+var handouts = load('gn_handouts', []);
+function showHandoutModal(title, body, img) {
+  var old = $('handoutModal');
+  if (old) old.remove();
+  var m = el('div'); m.id = 'handoutModal';
+  var box = el('div', 'box');
+  m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+  box.appendChild(btn('Close ✕', 'close', function () { m.remove(); }));
+  box.appendChild(el('h2', null, title || 'Handout'));
+  if (img) {
+    var im = el('img'); im.src = img; im.alt = title || 'Handout image';
+    im.onerror = function () { im.remove(); };
+    box.appendChild(im);
+  }
+  box.appendChild(el('p', null, body || ''));
+  m.appendChild(box); document.body.appendChild(m);
+}
+function renderHandouts() {
+  var ul = $('handoutList'); ul.innerHTML = '';
+  handouts.forEach(function (h) {
+    var li = el('li', 'dm-card');
+    li.innerHTML = '<div class="t">' + esc(h.title) + '</div><div class="sub">' +
+      esc((h.body || '').slice(0, 80)) + (h.body && h.body.length > 80 ? '…' : '') + '</div>';
+    var row = el('div', 'dm-row');
+    row.appendChild(btn('👁 Preview', 'dm-btn', function () { showHandoutModal(h.title, h.body, h.img); }));
+    row.appendChild(btn('📤 Resend', 'dm-btn primary', function () { sendHandout(h.title, h.body, h.img, true); }));
+    li.appendChild(row); ul.appendChild(li);
+  });
+  if (!handouts.length) ul.innerHTML = '<div class="dm-status">Nothing sent yet.</div>';
+}
+function sendHandout(title, body, img, isResend) {
+  var h = { title: title, body: body, img: img || '', ts: Date.now() };
+  if (!isResend) { handouts.unshift(h); store('gn_handouts', handouts); renderHandouts(); }
+  bcast({ t: 'handout', title: title, body: body, img: img || '' });
+  toast('“' + title + '” sent to players.');
+}
+function wireHandout() {
+  renderHandouts();
+  $('hSend').addEventListener('click', function () {
+    var title = $('hTitle').value.trim() || 'Untitled Handout';
+    sendHandout(title, $('hBody').value, $('hImg').value.trim(), false);
+  });
+}
+/* Panel wiring + inbound network events */
+var panelsWired = false;
+function togglePanel(tool) {
+  document.querySelectorAll('.dm-panel').forEach(function (p) {
+    p.hidden = !(p.dataset.panel === tool && p.hidden);
+  });
+  document.querySelectorAll('button[data-tool]').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.tool === tool && !$('dmPanels').querySelector('[data-panel="' + tool + '"]').hidden);
+  });
+  if (tool === 'aoe') ensureOverlay();
+}
+function onNet(ev) {                                                  // coordinator: call for every inbound net event
+  if (!ev || typeof ev !== 'object') return;
+  if (ev.t === 'sfx') playSfx(ev.name, ev.on);
+  else if (ev.t === 'handout') showHandoutModal(ev.title, ev.body, ev.img);
+  else if (ev.t === 'aoe') {
+    if (ev.clear) { aoeClear(true); return; }
+    aoe.shape = ev.shape || 'circle'; aoe.size = ev.size || 20;
+    aoe.ox = ev.origin && ev.origin.x; aoe.oy = ev.origin && ev.origin.y;
+    aoe.angle = ev.angle || 0; aoe.confirmed = true; aoe.placing = false;
+    aoeRecompute();
+  }
+  else if (ev.t === 'turn') { activeTurnId = ev.tokenId || null; renderInit(); }
+  else if (ev.t === 'tokenAdd') renderInit();                          // keep combatant picker fresh
+}
+function initDMTools() {
+  if (panelsWired) return;
+  panelsWired = true;
+  document.querySelectorAll('button[data-tool]').forEach(function (b) {   // also wires Module 2 placeholders
+    b.addEventListener('click', function () { togglePanel(b.dataset.tool); });
+  });
+  // Bug 7: panel close buttons
+  document.querySelectorAll('.dm-panel-close').forEach(function (b) {
+    b.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var panel = b.getAttribute('data-close');
+      var el = document.querySelector('.dm-panel[data-panel="' + panel + '"]');
+      if (el) el.hidden = true;
+      document.querySelectorAll('button[data-tool]').forEach(function (tb) {
+        if (tb.dataset.tool === panel) tb.classList.remove('active');
+      });
+    });
+  });
+  wireAoE(); wireMonster(); wireNpc(); wireInit(); wireSfx(); wireHandout();
+  ensureOverlay(); startLoop();
+}
+window.initDMTools = initDMTools;
+window.DMTools = {
+  init: initDMTools,
+  onNet: onNet,                 // inbound net router — coordinator calls DMTools.onNet(ev)
+  playSfx: playSfx,             // playSfx(name, on?) — used by both DM and players
+  clearAoE: function () { aoeClear(false); },
+  getState: function () { return { aoe: aoe, combat: combat, turnIdx: turnIdx, bestiary: bestiary, npcs: npcs }; }
+};
+})();
+
+/* Module 4 — AI Copilot + DM Guide + Always-On Listening (DM-only) */
+/* Depends on Module 1: G.settings.groqKey, G.transcript[], G.onPlayerText, netBroadcast(ev), addChat(who,text) */
+(function(){
+'use strict';
+
+/* ---------- Groq (reimplemented) ---------- */
+async function groqChat(messages, maxTokens){
+  maxTokens = maxTokens || 800;
+  const key = (G.settings && G.settings.groqKey) || '';
+  if(!key) return null;
+  const models = ['openai/gpt-oss-120b','llama-3.3-70b-versatile','qwen/qwen3-32b'];
+  for(const m of models){
+    try{
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions',{method:'POST',
+        headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},
+        body:JSON.stringify({model:m, messages, temperature:0.85, max_tokens:maxTokens})});
+      if(!r.ok) continue;
+      const j = await r.json();
+      return (j.choices[0].message.content || '').trim();
+    }catch(e){}
+  }
+  return null;
+}
+const NO_KEY_MSG = 'Add a Groq API key in Settings to enable the AI copilot';
+
+/* ---------- Transcript buffer ---------- */
+function pushTranscript(who, text){
+  if(!text || !String(text).trim()) return;
+  G.transcript = G.transcript || [];
+  G.transcript.push({who, text:String(text).trim(), ts:Date.now()});
+  if(G.transcript.length > 200) G.transcript = G.transcript.slice(-200);
+  copilotActivityBump();
+}
+G.onPlayerText = (from, text) => pushTranscript(from, text); // Module 1 chat hook
+
+/* ---------- Always-on listening ---------- */
+let recog = null, listening = false, micSupported = false;
+
+function startListening(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const ind = document.getElementById('mic-ind'), txt = document.getElementById('mic-txt');
+  const tgl = document.getElementById('mic-toggle');
+  if(!SR){
+    // iPhone Safari etc.: no mic UI at all, chat text still feeds the AI
+    if(ind){ ind.classList.add('off'); txt.textContent = '🎙 mic unavailable'; }
+    if(tgl) tgl.style.display = 'none';
+    return;
+  }
+  micSupported = true;
+  if(tgl) tgl.style.display = '';
+  // One permission grant, then continuous recognition
+  navigator.mediaDevices.getUserMedia({audio:true}).then(()=>{
+    if(recog){ try{recog.start();}catch(e){} return; }
+    recog = new SR();
+    recog.continuous = true;
+    recog.interimResults = true;
+    recog.lang = 'en-US';
+    recog.onresult = (ev)=>{
+      let finalText = '';
+      for(let i = ev.resultIndex; i < ev.results.length; i++){
+        if(ev.results[i].isFinal) finalText += ev.results[i][0].transcript + ' ';
+      }
+      finalText = finalText.trim();
+      if(finalText){
+        pushTranscript('DM 🎙', finalText);          // into the shared transcript buffer
+        addChat('DM 🎙', finalText);                 // visible in DM chat as spoken words
+      }
+    };
+    recog.onend = ()=>{ if(listening){ try{recog.start();}catch(e){} } }; // auto-restart
+    recog.onerror = ()=>{ /* keep quiet; onend restarts */ };
+    listening = true;
+    try{recog.start();}catch(e){}
+    if(ind){ ind.classList.remove('off'); ind.querySelector('.dot').style.display='';
+      txt.textContent = '🎙 listening'; }
+    if(tgl) tgl.textContent = '🎙 Stop listening';
+  }).catch(()=>{ /* permission denied: stay silent, chat still works */
+    if(ind){ ind.classList.add('off'); txt.textContent = '🎙 mic off'; }
+  });
+}
+function stopListening(){
+  listening = false;
+  if(recog){ try{recog.stop();}catch(e){} }
+  const ind = document.getElementById('mic-ind'), txt = document.getElementById('mic-txt');
+  const tgl = document.getElementById('mic-toggle');
+  if(ind){ ind.classList.add('off'); ind.querySelector('.dot').style.display='none'; txt.textContent='🎙 mic off'; }
+  if(tgl) tgl.textContent = '🎙 Start listening';
+}
+
+/* ---------- Fallback beats (no Groq key) ---------- */
+function fallbackBeats(seed){
+  return [
+    {title:'The Hook', description:'The party is drawn into the adventure by: '+seed+'. Describe the scene, let them ask questions, then ask "what do you do?"',
+     readAloud:['The road stretches ahead, quiet except for the wind. Then something moves in the brush…'],
+     npcs:[{name:'Nervous Traveler', line:'"Please — you have to help us. They took our wagon an hour ago!"'}],
+     monsters:[{name:'Goblin', hp:7, ac:15, attacks:['Scimitar +4 (1d6+2)','Shortbow +4 (1d6+2)']}],
+     dmTips:['Read boxed text slowly, then pause.','Ask "what do you do?" and wait — silence is fine.','Call for Perception (Wisdom) checks when they search.']},
+    {title:'The Twist', description:'What seemed simple is not. The obvious enemy has a backer, a trap, or a secret ally. Escalate the stakes.',
+     readAloud:['From the shadows steps a figure twice the size of the others, grinning.'],
+     npcs:[], monsters:[{name:'Hobgoblin', hp:11, ac:18, attacks:['Longsword +3 (1d8+1)']}],
+     dmTips:['Let a player plan work, then twist it.','Keep combat moving: 30 seconds per turn.']},
+    {title:'The Payoff', description:'Resolution: a reward, a revelation, or a bigger hook. Tie loose ends to player choices.',
+     readAloud:['The dust settles. What the party finds changes everything.'],
+     npcs:[{name:'Grateful Merchant', line:'"You saved our goods — take this, and our thanks."'}],
+     monsters:[], dmTips:['Award XP/loot now, not next session.','End on a hook: "But one of them was carrying a strange map…"']}
+  ];
+}
+const FALLBACK_TIPS = ['Read the boxed text slowly…','Ask "what do you do?" then wait.','Call for checks, don\'t hand out info free.','Fail forward: a failed check costs something, it never stops the story.','End each beat with a clear choice.'];
+
+/* ---------- DM Guide ---------- */
+let guide = null;        // {seed, beats:[...], current:int}
+let completedBeats = []; // beats already played, for evolveGuide
+
+function stripFences(s){
+  return String(s||'').replace(/```(?:json)?/gi,'').replace(/```/g,'').trim();
+}
+function safeParseGuide(raw){
+  if(!raw) return null;
+  try{
+    const j = JSON.parse(stripFences(raw));
+    if(!j.beats || !Array.isArray(j.beats) || !j.beats.length) return null;
+    return {seed:'', beats:j.beats.slice(0,8), current:0};
+  }catch(e){ return null; }
+}
+
+async function generateGuide(seed){
+  seed = (seed || '').trim() || 'a fantasy adventure';
+  const panel = document.getElementById('guide-panel');
+  panel.innerHTML = '<p class="guide-loading">✨ Weaving your adventure…</p>';
+  guide = null; completedBeats = [];
+  const sys = 'You are a D&D campaign designer. Respond ONLY with strict JSON, no markdown fences, no commentary. '+
+    'Shape: {"beats":[{"title":string,"description":string,"readAloud":[string],"npcs":[{"name":string,"line":string}],'+
+    '"monsters":[{"name":string,"hp":number,"ac":number,"attacks":[string]}],"dmTips":[string],"bossMonologue":string?}]}. '+
+    'Write exactly 5 beats: hook, complication, twist, climax, payoff. Keep readAloud vivid (2-4 sentences each, 1-2 blocks per beat). '+
+    'Give the climax beat a bossMonologue (3-5 dramatic sentences). dmTips: 2-4 per beat, aimed at a human DM.';
+  const user = 'Campaign seed: '+seed+'. Build the 5-beat adventure guide.';
+  let raw = null;
+  try{ raw = await groqChat([{role:'system',content:sys},{role:'user',content:user}], 2500); }catch(e){}
+  guide = safeParseGuide(raw);
+  if(!guide){
+    guide = {seed, beats:fallbackBeats(seed), current:0};
+  }
+  guide.seed = seed;
+  if(!raw) showCopilotCard('ℹ️ '+NO_KEY_MSG+'. Using the built-in 3-beat guide.');
+  renderBeat();
+}
+
+async function evolveGuide(){
+  if(!guide || !guide.beats.length) return;
+  const done = completedBeats.map(b=>b.title).join(', ');
+  const recent = (G.transcript||[]).slice(-25).map(e=>e.who+': '+e.text).join('\n');
+  const sys = 'You are a D&D campaign designer. The human DM just finished a beat. Respond ONLY with strict JSON, no markdown fences. '+
+    'Shape: {"beats":[{"title":string,"description":string,"readAloud":[string],"npcs":[{"name":string,"line":string}],'+
+    '"monsters":[{"name":string,"hp":number,"ac":number,"attacks":[string]}],"dmTips":[string],"bossMonologue":string?}]}. '+
+    'Rewrite/extend the remaining beats so the guide reflects what ACTUALLY happened (deaths, betrayals, clever plans, new NPCs). '+
+    'Keep the same number of remaining beats; do not repeat completed beats.';
+  const user = 'Campaign seed: '+guide.seed+'\nCompleted beats: '+done+
+    '\nRecent transcript:\n'+recent+
+    '\nRemaining beats to rewrite: '+JSON.stringify(guide.beats.slice(guide.current).map(b=>b.title));
+  let raw = null;
+  try{ raw = await groqChat([{role:'system',content:sys},{role:'user',content:user}], 2500); }catch(e){}
+  const next = safeParseGuide(raw);
+  if(next && next.beats.length){
+    guide.beats = guide.beats.slice(0, guide.current).concat(next.beats);
+    renderBeat();
+  }
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderBeat(){
+  const panel = document.getElementById('guide-panel');
+  if(!guide || !guide.beats.length){
+    panel.innerHTML = '<p class="guide-loading">No guide yet — enter a seed above.</p>'; return;
+  }
+  const i = Math.min(guide.current, guide.beats.length-1);
+  const b = guide.beats[i];
+  let h = '<div class="guide-beat"><div class="beat-count">BEAT '+(i+1)+' OF '+guide.beats.length+'</div><h3>'+esc(b.title)+'</h3>';
+  h += '<p class="desc">'+esc(b.description||'')+'</p>';
+  (b.readAloud||[]).forEach((ra,ri)=>{
+    h += '<div class="readaloud"><p>“'+esc(ra)+'”</p>'+
+      '<button data-ra="'+ri+'">📢 Send to players</button></div>';
+  });
+  if(b.bossMonologue){
+    h += '<div class="boss-mono"><div class="lbl">👑 BOSS MONOLOGUE</div><p>“'+esc(b.bossMonologue)+'”</p>'+
+      '<button data-mono="1">📢 Send to players</button></div>';
+  }
+  (b.npcs||[]).forEach(n=>{
+    h += '<div class="npc-line"><span class="nm">'+esc(n.name)+':</span> <em>“'+esc(n.line)+'”</em><br>'+
+      '<button data-npc="'+esc(n.name)+'">📢 Send to players</button></div>';
+  });
+  if((b.monsters||[]).length){
+    h += '<div class="monster-chips">'+b.monsters.map(m=>
+      '<span class="monster-chip"><b>'+esc(m.name)+'</b> · HP '+esc(m.hp)+' · AC '+esc(m.ac)+
+      '<br><small>'+esc((m.attacks||[]).join(' · '))+'</small></span>').join('')+'</div>';
+  }
+  if((b.dmTips||[]).length){
+    h += '<ul class="dm-tips">'+b.dmTips.map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>';
+  }
+  h += '<div class="beat-nav">'+
+    (i>0?'<button id="beat-prev">← Prev</button>':'')+
+    '<button id="beat-next">Next Beat →</button></div></div>';
+  panel.innerHTML = h;
+
+  // Explicit DM-triggered broadcasts ONLY (never auto-broadcast guide content)
+  panel.querySelectorAll('[data-ra]').forEach(btn=>btn.onclick=()=>{
+    const text = b.readAloud[+btn.dataset.ra];
+    netBroadcast({t:'readaloud', text}); addChat('DM 📢', text);
+  });
+  const mono = panel.querySelector('[data-mono]');
+  if(mono) mono.onclick=()=>{ netBroadcast({t:'readaloud', text:b.bossMonologue}); addChat('DM 📢', b.bossMonologue); };
+  panel.querySelectorAll('[data-npc]').forEach(btn=>btn.onclick=()=>{
+    const n = (b.npcs||[]).find(x=>x.name===btn.dataset.npc);
+    if(n){ const text = n.name+': "'+n.line+'"'; netBroadcast({t:'readaloud', text}); addChat('DM 📢', text); }
+  });
+  const nx = document.getElementById('beat-next');
+  if(nx) nx.onclick = ()=>{
+    completedBeats.push(guide.beats[guide.current]);
+    guide.current++;
+    if(guide.current >= guide.beats.length){ guide.current = guide.beats.length-1; renderBeat(); return; }
+    renderBeat();
+    evolveGuide(); // ever-changing guide: rewrite remaining beats around what happened
+  };
+  const pv = document.getElementById('beat-prev');
+  if(pv) pv.onclick = ()=>{ if(guide.current>0){ guide.current--; renderBeat(); } };
+}
+
+// Module 3 hooks: append to current beat
+G.guideAddMonster = function(block){
+  if(!guide || !guide.beats.length) return;
+  const b = guide.beats[Math.min(guide.current, guide.beats.length-1)];
+  b.monsters = b.monsters || [];
+  b.monsters.push({name:block.name||'Monster', hp:block.hp||10, ac:block.ac||12, attacks:block.attacks||[]});
+  renderBeat();
+};
+G.guideAddNPC = function(npc){
+  if(!guide || !guide.beats.length) return;
+  const b = guide.beats[Math.min(guide.current, guide.beats.length-1)];
+  b.npcs = b.npcs || [];
+  b.npcs.push({name:npc.name||'NPC', line:npc.line||''});
+  renderBeat();
+};
+
+/* ---------- AI Copilot ---------- */
+let copilotTimer = null, activityCount = 0, lastSuggest = 0;
+
+function showCopilotCard(html){
+  const p = document.getElementById('copilot-panel');
+  // Bug 6: only one copilot card ever renders — replace existing instead of stacking
+  let d = p.querySelector('.copilot-card');
+  if (!d) {
+    d = document.createElement('div');
+    d.className = 'copilot-card';
+    d.innerHTML = '<button class="dismiss" title="Dismiss">✕</button><div class="copilot-body"></div>';
+    d.querySelector('.dismiss').onclick = ()=>d.remove();
+    p.prepend(d);
+  }
+  d.querySelector('.copilot-body').innerHTML = html;
+}
+function setStatus(s){ const el=document.getElementById('copilot-status'); if(el) el.textContent = s; }
+
+function copilotActivityBump(){
+  activityCount++;
+  if(activityCount >= 3){ activityCount = 0; copilotSuggest(); }
+}
+
+async function copilotSuggest(){
+  const now = Date.now();
+  if(now - lastSuggest < 20000) return; // don't spam
+  lastSuggest = now;
+  setStatus('Copilot thinking…');
+  const recent = (G.transcript||[]).slice(-20).map(e=>e.who+': '+e.text).join('\n') || '(no transcript yet)';
+  const beat = guide ? guide.beats[Math.min(guide.current, guide.beats.length-1)] : null;
+  const beatCtx = beat ? ('Current beat "'+beat.title+'": '+beat.description) : 'No guide built yet.';
+  const firstTimer = document.getElementById('firstimer');
+  const beginner = firstTimer && firstTimer.checked;
+  const sys = 'You are a D&D co-DM whispering to a first-time human DM. Never break character as an advisor; never address players. '+
+    'Given the recent transcript and current beat, give 2-3 SHORT actionable suggestions (one line each): '+
+    'a rules reminder (ability checks to call for), a story nudge if players seem stuck, and one dramatic idea. '+
+    'Reply as plain lines starting with "• ". No preamble, no sign-off.'+
+    (beginner ? ' Also include beginner scaffolding: e.g. "Read the boxed text slowly…", "Ask \'what do you do?\' then wait." Count these among the 3.' : '');
+  const user = beatCtx+'\n\nRecent transcript:\n'+recent;
+  let raw = null;
+  try{ raw = await groqChat([{role:'system',content:sys},{role:'user',content:user}], 400); }catch(e){}
+  if(!raw){
+    setStatus('Copilot idle.');
+    if(!(G.settings&&G.settings.groqKey))
+      showCopilotCard('<b>🤖 Copilot</b><ul><li>'+NO_KEY_MSG+'.</li>'+FALLBACK_TIPS.slice(0,3).map(t=>'<li>'+esc(t)+'</li>').join('')+'</ul>');
+    return;
+  }
+  const lines = raw.split('\n').map(l=>l.trim()).filter(l=>l.length).slice(0,4);
+  showCopilotCard('<b>🤖 Copilot</b><ul>'+lines.map(l=>'<li>'+esc(l.replace(/^[•\-\*]\s*/,''))+'</li>').join('')+'</ul>');
+  setStatus('Copilot updated '+new Date().toLocaleTimeString()+'.');
+}
+
+// "🎲 Suggest check" — one-click sendable check prompt
+async function suggestCheck(){
+  const checks = ['Perception','Investigation','Stealth','Persuasion','Insight','Athletics','Arcana','Survival'];
+  const pick = checks[Math.floor(Math.random()*checks.length)];
+  let line = 'DM calls for a '+pick+' check';
+  try{
+    const recent = (G.transcript||[]).slice(-8).map(e=>e.who+': '+e.text).join('\n');
+    const raw = await groqChat([
+      {role:'system',content:'You are a D&D co-DM advisor. Reply with ONE short line like "DM calls for a Stealth check" — pick the most fitting ability check for the situation. No quotes, no extra text.'},
+      {role:'user',content:recent || 'The party is exploring.'}], 60);
+    if(raw) line = raw.replace(/^["']|["']$/g,'');
+  }catch(e){}
+  showCopilotCard('<b>🎲 Suggested check</b><p style="margin:6px 0">'+esc(line)+'</p>'+
+    '<div class="copilot-actions"><button data-sendcheck="1">📢 Send to players</button></div>');
+  const card = document.getElementById('copilot-panel').firstChild;
+  const btn = card && card.querySelector('[data-sendcheck]');
+  if(btn) btn.onclick = ()=>{ netBroadcast({t:'readaloud', text:line}); addChat('DM 📢', line); card.remove(); };
+}
+
+// NPC line on demand (DM-side suggestion, never auto-sent)
+G.copilotNPCLine = async function(npc){
+  const name = (npc&&npc.name)||'NPC';
+  setStatus('Copilot writing a line for '+name+'…');
+  let line = null;
+  try{
+    const raw = await groqChat([
+      {role:'system',content:'You are a D&D co-DM whispering to the human DM. Write ONE short in-character line of dialogue for the NPC named below. Only the line, in quotes.'},
+      {role:'user',content:'NPC: '+name+((npc&&npc.role)?' ('+npc.role+')':'')}], 120);
+    if(raw) line = raw;
+  }catch(e){}
+  setStatus('Copilot idle.');
+  if(!line){ line = '"[No key — improvise something in character!]"'; }
+  showCopilotCard('<b>🎭 '+esc(name)+'</b><p style="margin:6px 0;font-style:italic">'+esc(line)+'</p>'+
+    '<div class="copilot-actions"><button data-sendnpc="1">📢 Send to players</button></div>');
+  const card = document.getElementById('copilot-panel').firstChild;
+  const btn = card && card.querySelector('[data-sendnpc]');
+  if(btn) btn.onclick = ()=>{
+    const text = name+': '+line;
+    netBroadcast({t:'readaloud', text}); addChat('DM 📢', text); card.remove();
+  };
+};
+
+function initCopilot(){
+  const gen = document.getElementById('guide-gen');
+  if(gen) gen.onclick = ()=>generateGuide(document.getElementById('guide-seed').value);
+  const seed = document.getElementById('guide-seed');
+  if(seed) seed.addEventListener('keydown',e=>{ if(e.key==='Enter') generateGuide(seed.value); });
+  const ref = document.getElementById('copilot-refresh');
+  if(ref) ref.onclick = ()=>copilotSuggest();
+  const sc = document.getElementById('copilot-suggest-check');
+  if(sc) sc.onclick = ()=>suggestCheck();
+  const tgl = document.getElementById('mic-toggle');
+  if(tgl) tgl.onclick = ()=>{ listening ? stopListening() : startListening(); };
+  if(copilotTimer) clearInterval(copilotTimer);
+  copilotTimer = setInterval(()=>copilotSuggest(), 30000); // every 30s
+  setStatus('Copilot ready. '+((G.settings&&G.settings.groqKey)?'Groq connected.':NO_KEY_MSG+'.'));
+}
+
+// Expose required entry points for the coordinator / other modules
+window.initCopilot = initCopilot;
+window.generateGuide = generateGuide;
+window.startListening = startListening;
+window.stopListening = stopListening;
+
+})();
+
+
+/* ================= Coordinator glue =================
+   - exposes the globals Modules 2/3/4 call directly (netBroadcast, addChat)
+   - init order: DM -> initDMMap -> initDMTools -> initCopilot ; player -> canvas + voice + drag
+   - routes every inbound event to glueNet, which renders player state and feeds DM-side chat/AI
+*/
+(function () {
+'use strict';
+
+var MAP_DIMS = { tavern: [16, 11], dungeon: [14, 11], cave: [15, 11], blank: [16, 11] };
+
+/* globals other modules call directly */
+window.netBroadcast = function (ev) { return GN.netBroadcast(ev); };
+window.addChat = GN.addChat;
+
+/* per-client player state */
+G.lastFog = new Set();
+G.lastTokens = [];
+G.playerMapName = 'blank';
+G.playerAoE = null;
+G.playerTurnId = null;
+
+function $(id) { return document.getElementById(id); }
+
+/* ---------- player map rendering ---------- */
+function renderPlayer() {
+  var cv = $('player-canvas');
+  if (!cv) return;
+  var wrap = $('pmap');
+  if (!wrap) return;
+  var r = wrap.getBoundingClientRect();
+  if (r.width < 10 || r.height < 10) return;
+  cv.width = Math.max(1, Math.round(r.width));
+  cv.height = Math.max(1, Math.round(r.height));
+  renderPlayerMap(cv, G.lastFog, G.lastTokens, G.playerMapName);
+  drawPlayerOverlays(cv);
+}
+
+function drawShapeFeet(ctx, shape, ox, oy, size, angle) {
+  var X = function (f) { return f / 5 * 64; };
+  ctx.save();
+  ctx.translate(X(ox), X(oy));
+  ctx.rotate(angle || 0);
+  ctx.beginPath();
+  if (shape === 'circle') { ctx.arc(0, 0, X(size), 0, 7); }
+  else if (shape === 'cone') { ctx.moveTo(0, 0); ctx.lineTo(X(size), X(-size / 2)); ctx.lineTo(X(size), X(size / 2)); ctx.closePath(); }
+  else if (shape === 'line') { ctx.rect(0, X(-2.5), X(size), X(5)); }
+  else { ctx.rect(0, X(-size / 2), X(size), X(size)); }
+  ctx.fill(); ctx.stroke();
+  ctx.restore();
+}
+
+function drawPlayerOverlays(cv) {
+  var ctx = cv.getContext('2d');
+  var dims = MAP_DIMS[G.playerMapName] || [16, 11];
+  var scale = Math.min(cv.width / (dims[0] * 64), cv.height / (dims[1] * 64));
+  ctx.save();
+  ctx.scale(scale, scale);
+  var a = G.playerAoE;
+  if (a && a.origin) {
+    ctx.fillStyle = 'rgba(255,90,60,.30)';
+    ctx.strokeStyle = 'rgba(255,90,60,.75)';
+    ctx.lineWidth = 2 / scale;
+    drawShapeFeet(ctx, a.shape, a.origin.x, a.origin.y, a.size, a.angle || 0);
+  }
+  if (G.playerTurnId) {
+    var ts = G.lastTokens || [];
+    for (var i = 0; i < ts.length; i++) {
+      if (ts[i].id === G.playerTurnId) {
+        ctx.strokeStyle = '#ffd76a';
+        ctx.lineWidth = 4 / scale;
+        ctx.beginPath();
+        ctx.arc((ts[i].x + 0.5) * 64, (ts[i].y + 0.5) * 64, 40, 0, 7);
+        ctx.stroke();
+        break;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+/* ---------- inbound event routing ---------- */
+function glueNet(ev, sender) {
+  var role = G.role;
+  if (role === 'dm') {
+    if (ev.t === 'chat') {
+      GN.addChat(ev.from, ev.text, 'them');
+      if (typeof G.onPlayerText === 'function') { try { G.onPlayerText(ev.from, ev.text); } catch (e) {} }
+    } else if (ev.t === 'dice') {
+      GN.addChat('\uD83C\uDFB2 ' + ev.from, 'rolled d' + ev.sides + ': ' + ev.result, 'dice');
+    } else if (ev.t === 'move') {
+      var t = null, ts = G.tokens || [];
+      for (var i = 0; i < ts.length; i++) if (ts[i].id === ev.tokenId) { t = ts[i]; break; }
+      if (t && window.__dmApi && typeof window.__dmApi.moveToken === 'function') {
+        try { window.__dmApi.moveToken(t, ev.x, ev.y); } catch (e) {}
+      }
+    }
+  } else {
+    if (ev.t === 'chat') {
+      GN.addChat(ev.from, ev.text, 'them');
+    } else if (ev.t === 'readaloud') {
+      GN.addChat('DM \uD83D\uDCE2', ev.text, 'sys');
+    } else if (ev.t === 'dice') {
+      GN.addChat('\uD83C\uDFB2 ' + ev.from, 'rolled d' + ev.sides + ': ' + ev.result, 'dice');
+    } else if (ev.t === 'fog') {
+      G.playerMapName = ev.map || G.playerMapName || 'blank';
+      G.lastFog = new Set(ev.revealed || []);
+      renderPlayer();
+    } else if (ev.t === 'tokens') {
+      G.lastTokens = ev.tokens || [];
+      renderPlayer();
+    } else if (ev.t === 'aoe') {
+      G.playerAoE = ev.clear ? null : ev;
+      renderPlayer();
+    } else if (ev.t === 'turn') {
+      G.playerTurnId = ev.tokenId || null;
+      renderPlayer();
+    }
+  }
+  /* Module 3 handles sfx + handout on both sides; DM draws AoE/turn on its own overlay */
+  if (window.DMTools && typeof window.DMTools.onNet === 'function') {
+    if (!(ev.t === 'aoe' || ev.t === 'turn') || role === 'dm') {
+      try { window.DMTools.onNet(ev); } catch (e) {}
+    }
+  }
+}
+GN.onNetEvent(glueNet);
+
+window.__onWelcome = function (ev) {
+  G.playerMapName = ev.map || 'blank';
+  G.lastFog = new Set(ev.revealed || []);
+  G.lastTokens = ev.tokens || [];
+  requestAnimationFrame(renderPlayer);
+};
+
+/* ---------- DM init ---------- */
+function wireDMChat() {
+  var inp = $('dm-chat-input'), btn = $('dm-chat-send');
+  if (!inp || !btn) return;
+  function send() {
+    var text = inp.value.trim();
+    if (!text) return;
+    inp.value = '';
+    GN.addChat(G.name || 'DM', text, 'me');
+    if (typeof G.onPlayerText === 'function') { try { G.onPlayerText(G.name || 'DM', text); } catch (e) {} }
+    GN.netBroadcast({ t: 'chat', from: G.name || 'DM', text: text });
+  }
+  btn.onclick = send;
+  inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+}
+
+var dmInitDone = false;
+function initDM() {
+  if (dmInitDone) return;
+  dmInitDone = true;
+  G.mapEl = $('dm-map-wrap');
+  G.netBroadcast = window.netBroadcast;
+  var api = initDMMap({});
+  window.__dmApi = api;
+  G.mapAddToken = api.addToken;
+  G.stagingAdd = function (tok) { tok.staging = true; return api.addToken(tok); };
+  G.mapCanvas = $('gn-dmmap-canvas');
+  G.getWelcomeState = function () {
+    return {
+      map: G.mapName || 'blank',
+      revealed: Array.from(G.fogRevealed || []),
+      tokens: (G.tokens || []).filter(function (t) { return !t.hidden && !t.staging; })
+        .map(function (t) { return { id: t.id, label: t.label, x: t.x, y: t.y, hp: t.hp, maxHp: t.maxHp, color: t.color, size: t.size, ownerPeerId: t.ownerPeerId }; })
+    };
+  };
+  initDMTools();
+  initCopilot();
+  wireDMChat();
+}
+
+/* ---------- player init ---------- */
+function initPlayerDrag() {
+  var cv = $('player-canvas');
+  if (!cv || cv._dragBound) return;
+  cv._dragBound = true;
+  var dragId = null;
+  function dims() { return MAP_DIMS[G.playerMapName] || [16, 11]; }
+  function evtGrid(e) {
+    var r = cv.getBoundingClientRect(), d = dims();
+    var scale = Math.min(r.width / (d[0] * 64), r.height / (d[1] * 64));
+    return { gx: Math.floor((e.clientX - r.left) / scale / 64), gy: Math.floor((e.clientY - r.top) / scale / 64) };
+  }
+  function ownTokAt(gx, gy) {
+    var ts = G.lastTokens || [];
+    for (var i = ts.length - 1; i >= 0; i--) {
+      var t = ts[i];
+      if (t.ownerPeerId !== G.peerId) continue;
+      var s = t.size || 1;
+      if (gx >= t.x && gx < t.x + s && gy >= t.y && gy < t.y + s) return t;
+    }
+    return null;
+  }
+  cv.addEventListener('pointerdown', function (e) {
+    var g = evtGrid(e), t = ownTokAt(g.gx, g.gy);
+    if (t) { dragId = t.id; try { cv.setPointerCapture(e.pointerId); } catch (err) {} }
+  });
+  cv.addEventListener('pointerup', function (e) {
+    if (!dragId) return;
+    var g = evtGrid(e), d = dims();
+    g.gx = Math.max(0, Math.min(d[0] - 1, g.gx));
+    g.gy = Math.max(0, Math.min(d[1] - 1, g.gy));
+    GN.netToHost({ t: 'move', tokenId: dragId, x: g.gx, y: g.gy });
+    dragId = null;
+  });
+}
+
+/* player-side always-on voice: one toggle, then continuous recognition, no push-to-talk */
+function initPlayerVoice() {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR || $('pv-mic')) return; /* iPhone Safari etc.: chat text still feeds the AI */
+  var dp = $('dice-panel');
+  if (!dp) return;
+  var b = document.createElement('button');
+  b.id = 'pv-mic';
+  b.textContent = '\uD83C\uDF99 Voice: off';
+  var rec = null, on = false;
+  b.onclick = function () {
+    if (on) {
+      on = false;
+      try { rec.stop(); } catch (e) {}
+      b.textContent = '\uD83C\uDF99 Voice: off';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function () {
+      rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = false;
+      rec.lang = 'en-US';
+      rec.onresult = function (ev) {
+        var txt = '';
+        for (var i = ev.resultIndex; i < ev.results.length; i++) {
+          if (ev.results[i].isFinal) txt += ev.results[i][0].transcript + ' ';
+        }
+        txt = txt.trim();
+        if (txt) {
+          GN.addChat(G.name + ' \uD83C\uDF99', txt, 'me');
+          GN.netToHost({ t: 'chat', from: G.name + ' \uD83C\uDF99', text: txt });
+        }
+      };
+      rec.onend = function () { if (on) { try { rec.start(); } catch (e) {} } };
+      on = true;
+      try { rec.start(); } catch (e) {}
+      b.textContent = '\uD83C\uDF99 Voice: listening';
+    }).catch(function () { b.textContent = '\uD83C\uDF99 Voice: blocked'; });
+  };
+  dp.parentNode.insertBefore(b, dp.nextSibling);
+}
+
+var playerInitDone = false;
+function initPlayer() {
+  if (playerInitDone) return;
+  playerInitDone = true;
+  initPlayerDrag();
+  initPlayerVoice();
+  window.addEventListener('resize', function () { if (G.role === 'player') renderPlayer(); });
+  requestAnimationFrame(renderPlayer);
+}
+
+/* hook view entry so DM/player inits run once, after the view is shown */
+var _showView = GN.showView;
+GN.showView = function (name) {
+  _showView(name);
+  if (name === 'dm-view') initDM();
+  else if (name === 'player-view') initPlayer();
+};
+
+})();
+
+</script>
+</body>
+</html>
