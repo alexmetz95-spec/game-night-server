@@ -134,11 +134,14 @@ wss.on("connection", (socket) => {
       case "join-accepted": {
         if (!code || !rooms.has(code)) return;
         // Forward to everyone in the room; the guest filters by name/clientId.
+        // CRITICAL: forward the welcome `event` (map, tokens, fog, objects, chat)
+        // so joining/rejoining players receive the full table state.
         broadcast(code, {
           type: "join-accepted",
           code,
           name: msg.name || null,
           clientId: msg.clientId || null,
+          event: msg.event || {},
         });
         console.log(`join-accepted: ${msg.name} in room ${code}`);
         break;
