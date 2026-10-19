@@ -612,7 +612,19 @@ window.G = {
   role: null,        // 'dm' | 'player'
   name: '',
   code: '',
-  peerId: 'p-' + Math.random().toString(36).slice(2),
+  peerId: (function () {
+    // Stable per-browser identity: rejoins reuse the same peerId so the DM's
+    // token dedup (ownerPeerId match) and the player's own-token filter keep
+    // working after a refresh instead of orphaning/duplicating tokens.
+    try {
+      var p = localStorage.getItem('gn_peerId');
+      if (!p) {
+        p = 'p-' + Math.random().toString(36).slice(2);
+        localStorage.setItem('gn_peerId', p);
+      }
+      return p;
+    } catch (e) { return 'p-' + Math.random().toString(36).slice(2); }
+  })(),
   ws: null,
   settings: { groqKey: '', dmModel: 'llama-3.3-70b-versatile' },
   transcript: [],    // [{from, text, ts}]
@@ -1706,6 +1718,13 @@ if (document.readyState === 'loading') {
     });
     ov.appendChild(box);
     wrap.appendChild(ov);
+    // Preload all battlemap images while the DM chooses (~2.6 MB total) — the
+    // picked map then paints from the HTTP cache instead of stalling on a
+    // cold download, cutting the initial-map wait.
+    Object.keys(MAPS).forEach(function (k) {
+      var m = MAPS[k];
+      if (m && m.img) { try { var im = new Image(); im.src = m.img; } catch (e) {} }
+    });
   }
 
   // ---------- public init ----------
